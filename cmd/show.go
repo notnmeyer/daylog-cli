@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"os"
 
+	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
 
@@ -13,23 +13,17 @@ var showCmd = &cobra.Command{
 	Short: "Display today's log",
 	Long:  "Display today's log",
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := parseDateFromArgs(args)
-		if err != nil {
-			log.Fatalf("Couldn't parse date: %s", err.Error())
-		}
-
-		logFile, err := setup(*t)
+		dl, err := daylog.New(args)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		fileContents, err := os.ReadFile(logFile)
+		logContents, err := dl.Show()
 		if err != nil {
-			fmt.Println("Error:", err)
-			return
+			log.Fatalf(err.Error())
 		}
 
-		fmt.Println(string(fileContents))
+		fmt.Println(string(logContents))
 	},
 }
 
