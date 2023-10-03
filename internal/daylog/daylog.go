@@ -14,23 +14,25 @@ import (
 )
 
 type DayLog struct {
-	Path string
+	Path string // the path to the dir of the desired day
+	File string // the path to the full file
 }
 
 func New(args []string) (*DayLog, error) {
-	file, err := resolveLogPath(args)
+	dir, err := resolveLogDir(args)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DayLog{
-		Path: file,
+		Path: dir,
+		File: filepath.Join(dir, "log.md"),
 	}, nil
 }
 
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
-	if err := editor.Open(d.Path); err != nil {
+	if err := editor.Open(d.File); err != nil {
 		return err
 	}
 
@@ -46,8 +48,8 @@ func (d *DayLog) Show() (string, error) {
 	return contents, nil
 }
 
-// returns the complete path to log file
-func resolveLogPath(args []string) (string, error) {
+// returns the path to log dir for the requested date
+func resolveLogDir(args []string) (string, error) {
 	t, err := parseDateFromArgs(args)
 	if err != nil {
 		return "", err
@@ -68,7 +70,7 @@ func resolveLogPath(args []string) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(path, "log.md"), nil
+	return path, nil
 }
 
 // resolves root path, and creates directories specified in path
