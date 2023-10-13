@@ -10,12 +10,16 @@ import (
 
 	"github.com/adrg/xdg"
 	"github.com/araddon/dateparse"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 )
 
 type DayLog struct {
-	Path string // the path to the dir of the desired day
-	File string // the path to the full file
+	RootPath string // the root path of daylog's data dir, /blah/daylog
+	Path     string // the path to the dir of the desired day, /blah/daylog/2023/01/01
+	File     string // the path to the full file, /blah/daylog/2023/01/01/log.md
 }
 
 func New(args []string) (*DayLog, error) {
@@ -24,9 +28,14 @@ func New(args []string) (*DayLog, error) {
 		return nil, err
 	}
 
+	// split dir into a slice of the path components
+	pathComponents := strings.Split(dir, "/")
+
 	return &DayLog{
-		Path: dir,
-		File: filepath.Join(dir, "log.md"),
+		// exclude year/month/day from rootPath
+		RootPath: "/" + filepath.Join(pathComponents[:len(pathComponents)-3]...),
+		Path:     dir,
+		File:     filepath.Join(dir, "log.md"),
 	}, nil
 }
 
@@ -46,6 +55,57 @@ func (d *DayLog) Show() (string, error) {
 	}
 
 	return contents, nil
+}
+
+func (d *DayLog) Init() error {
+	_, err := git.PlainInit(d.RootPath, false)
+	if err != nil {
+		return err
+	}
+
+	// TODO: create main, not master
+
+	// make an initial commit
+	r, err := git.PlainOpen(d.RootPath)
+	if err != nil {
+		return fmt.Errorf("couldn't open repo: %s\n", err)
+	}
+
+	w, err := r.Worktree()
+	if err != nil {
+		return fmt.Errorf("couldn't create worktree: %s\n", err)
+	}
+
+	// add today's files to the worktree
+	w.AddGlob(d.Path)
+
+	c, err := config.LoadConfig(config.GlobalScope)
+	if err != nil {
+		return err
+	}
+
+	// commit
+	commitMsg := fmt.Sprintf("initial commit")
+	commit, err := w.Commit(commitMsg, &git.CommitOptions{
+		// TODO: load the details from the .gitconfig or env
+		Author: &object.Signature{
+			Name:  c.User.Name,
+			Email: c.User.Email,
+			When:  time.Now(),
+		},
+		AllowEmptyCommits: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	obj, err := r.CommitObject(commit)
+	if err != nil {
+		return fmt.Errorf("couldn't make commit: %s", err)
+	}
+	fmt.Println(obj)
+
+	return nil
 }
 
 // returns the path to log dir for the requested date

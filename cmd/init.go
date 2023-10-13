@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/go-git/go-git/v5"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -19,13 +18,11 @@ var initCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		fmt.Printf("Creating Git repository in %s", d.Path)
-		_, err = git.PlainInit(d.Path, false)
-		if err != nil {
-			log.Fatalf("Couldn't init repo: %s", err)
+		if err := d.Init(); err != nil {
+			log.Fatalf("couldn't create Git repo at %s: %s\n", d.RootPath, err)
 		}
 
-		// TODO: create main, not master
+		fmt.Printf("Initialized a Git repository at %s\n", d.RootPath)
 	},
 }
 
