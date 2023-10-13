@@ -1,6 +1,6 @@
-# DayLog[^1]
+# DayLog
 
-Keep track of what you're doing when you do it and forget trying to write summaries at EOD. DayLog is a dead-simple tool for terminal enthusiasts for taking quick notes throughout your day.
+Keep track of what you're doing when you do it and forget trying to write summaries at EOD. DayLog[^1] is a dead-simple tool for terminal enthusiasts for taking quick notes throughout your day.
 
 ## Usage
 
