@@ -7,6 +7,7 @@ require (
 	github.com/go-git/go-git/v5 v5.9.0
 	github.com/markusmobius/go-dateparser v1.2.1
 	github.com/spf13/cobra v1.7.0
+	github.com/tcnksm/go-gitconfig v0.1.2
 )
 
 require (

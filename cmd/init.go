@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"fmt"
-	"log"
+	"os"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
@@ -15,11 +15,13 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		d, err := daylog.New(args)
 		if err != nil {
-			log.Fatal(err)
+			fmt.Printf("error initializing: %s", err)
+			os.Exit(1)
 		}
 
 		if err := d.Init(); err != nil {
-			log.Fatalf("couldn't create Git repo at %s: %s\n", d.RootPath, err)
+			fmt.Printf("couldn't create Git repo at %s: %s\n", d.RootPath, err)
+			os.Exit(1)
 		}
 
 		fmt.Printf("Initialized a Git repository at %s\n", d.RootPath)
