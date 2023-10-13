@@ -12,7 +12,7 @@ To write or edit today's file, run `daylog` and today's log will be opened in `$
 
 To view today's file, run `daylog show`.
 
-Supply a date to interact with an ealier log, `daylog show -- 2023/01/07`
+Supply a date to interact with an ealier log, `daylog show -- 2023/01/07`. You can be more casual as well and use dates like "tomorrow", "yesterday", "1 day ago", etc.
 
 ---
 DayyyyyyyyyyLLooooooooog!
