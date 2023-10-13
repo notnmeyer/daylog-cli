@@ -9,10 +9,10 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/araddon/dateparse"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 )
 
@@ -153,11 +153,11 @@ func createDir(rootPath, path string) (string, error) {
 func parseDateFromArgs(args []string) (*time.Time, error) {
 	if len(args) > 0 {
 		dateString := strings.Join(args, " ")
-		t, err := dateparse.ParseStrict(dateString)
+		d, err := dateparser.Parse(nil, dateString)
 		if err != nil {
 			return nil, err
 		}
-		return &t, nil
+		return &d.Time, nil
 	} else {
 		t := time.Now()
 		return &t, nil
