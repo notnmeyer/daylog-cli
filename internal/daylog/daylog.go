@@ -9,28 +9,45 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
+	gitconfig "github.com/tcnksm/go-gitconfig"
 )
 
 type DayLog struct {
+	// the path to the data dir:
+	//   /blah/daylog
+	RootPath string
+	// the path to the dir of the desired day:
+	//   /blah/daylog/2023/01/01
 	Path string
+	// full path to the log file:
+	//   /blah/daylog/2023/01/01/log.md
+	File string
 }
 
 func New(args []string) (*DayLog, error) {
-	file, err := resolveLogPath(args)
+	dir, err := resolveLogDir(args)
 	if err != nil {
 		return nil, err
 	}
 
+	// split dir into a slice of the path components
+	pathComponents := strings.Split(dir, "/")
+
 	return &DayLog{
-		Path: file,
+		// exclude year/month/day from rootPath
+		RootPath: "/" + filepath.Join(pathComponents[:len(pathComponents)-3]...),
+		Path:     dir,
+		File:     filepath.Join(dir, "log.md"),
 	}, nil
 }
 
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
-	if err := editor.Open(d.Path); err != nil {
+	if err := editor.Open(d.File); err != nil {
 		return err
 	}
 
@@ -46,8 +63,60 @@ func (d *DayLog) Show() (string, error) {
 	return contents, nil
 }
 
-// returns the complete path to log file
-func resolveLogPath(args []string) (string, error) {
+func (d *DayLog) Init() error {
+	_, err := git.PlainInit(d.RootPath, false)
+	if err != nil {
+		return err
+	}
+
+	// TODO: create main, not master
+
+	// make an initial commit
+	r, err := git.PlainOpen(d.RootPath)
+	if err != nil {
+		return fmt.Errorf("couldn't open repo: %s\n", err)
+	}
+
+	w, err := r.Worktree()
+	if err != nil {
+		return fmt.Errorf("couldn't create worktree: %s\n", err)
+	}
+
+	// add today's files to the worktree
+	w.AddGlob(d.Path)
+
+	name, err := gitconfig.Username()
+	email, err := gitconfig.Email()
+	if err != nil {
+		return fmt.Errorf("couldn't read from .gitconfig: %s", err)
+	}
+
+	// commit
+	commitMsg := fmt.Sprintf("initial commit")
+	commit, err := w.Commit(commitMsg, &git.CommitOptions{
+		// TODO: load the details from the .gitconfig or env
+		Author: &object.Signature{
+			Name:  name,
+			Email: email,
+			When:  time.Now(),
+		},
+		AllowEmptyCommits: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	obj, err := r.CommitObject(commit)
+	if err != nil {
+		return fmt.Errorf("couldn't make commit: %s", err)
+	}
+	fmt.Println(obj)
+
+	return nil
+}
+
+// returns the path to log dir for the requested date
+func resolveLogDir(args []string) (string, error) {
 	t, err := parseDateFromArgs(args)
 	if err != nil {
 		return "", err
@@ -68,7 +137,7 @@ func resolveLogPath(args []string) (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(path, "log.md"), nil
+	return path, nil
 }
 
 // resolves root path, and creates directories specified in path
