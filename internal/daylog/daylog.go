@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/charmbracelet/glamour"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
+	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
 )
 
 type DayLog struct {
@@ -38,21 +38,15 @@ func (d *DayLog) Edit() error {
 	return nil
 }
 
-func (d *DayLog) Show(renderMarkdown bool) (string, error) {
+func (d *DayLog) Show(format string) (string, error) {
 	contents, err := editor.Read(d.Path)
 	if err != nil {
 		return "", err
 	}
 
-	if renderMarkdown {
-		renderer, _ := glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
-		)
-
-		contents, err = renderer.Render(contents)
-		if err != nil {
-			return "", err
-		}
+	contents, err = outputFormatter.Format(format, contents)
+	if err != nil {
+		return "", err
 	}
 
 	return contents, nil

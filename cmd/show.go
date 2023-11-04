@@ -8,6 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type ShowConfig struct {
+	Output string
+}
+
 var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display today's log",
@@ -18,9 +22,12 @@ var showCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		render, _ := cmd.Flags().GetBool("render")
+		format, err := cmd.PersistentFlags().GetString("output")
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
 
-		logContents, err := dl.Show(render)
+		logContents, err := dl.Show(format)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
@@ -31,12 +38,5 @@ var showCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(showCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// showCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	showCmd.Flags().BoolP("render", "r", false, "Render markdown in terminal")
+	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
 }
