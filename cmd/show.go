@@ -18,7 +18,9 @@ var showCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		logContents, err := dl.Show()
+		render, _ := cmd.Flags().GetBool("render")
+
+		logContents, err := dl.Show(render)
 		if err != nil {
 			log.Fatalf(err.Error())
 		}
@@ -36,7 +38,5 @@ func init() {
 	// and all subcommands, e.g.:
 	// showCmd.PersistentFlags().String("foo", "", "A help for foo")
 
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// showCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	showCmd.Flags().BoolP("render", "r", false, "Render markdown in terminal")
 }

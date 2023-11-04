@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/charmbracelet/glamour"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 )
@@ -37,10 +38,21 @@ func (d *DayLog) Edit() error {
 	return nil
 }
 
-func (d *DayLog) Show() (string, error) {
+func (d *DayLog) Show(renderMarkdown bool) (string, error) {
 	contents, err := editor.Read(d.Path)
 	if err != nil {
 		return "", err
+	}
+
+	if renderMarkdown {
+		renderer, _ := glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+		)
+
+		contents, err = renderer.Render(contents)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	return contents, nil
