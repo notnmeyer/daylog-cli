@@ -31,6 +31,10 @@ func New(args []string) (*DayLog, error) {
 
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
+	if err := createIfMissing(d.Path); err != nil {
+		return err
+	}
+
 	if err := editor.Open(d.Path); err != nil {
 		return err
 	}
@@ -106,4 +110,36 @@ func parseDateFromArgs(args []string) (*time.Time, error) {
 		t := time.Now()
 		return &t, nil
 	}
+}
+
+func createIfMissing(logFile string) error {
+	_, err := os.Stat(logFile)
+	if err == nil {
+		return nil
+	}
+
+	var file *os.File
+	if os.IsNotExist(err) {
+		file, err = os.Create(logFile)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+	}
+
+	// this is just awful, but just to get our date back out
+	// fix this
+	base := filepath.Dir(logFile)
+	baseSlice := strings.Split(base, "/")
+	day := baseSlice[len(baseSlice)-1]
+	month := baseSlice[len(baseSlice)-2]
+	year := baseSlice[len(baseSlice)-3]
+	header := fmt.Sprintf("# %s/%s/%s", year, month, day)
+
+	_, err = file.WriteString(header)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
