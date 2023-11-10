@@ -129,6 +129,8 @@ func createIfMissing(d *DayLog) error {
 			return err
 		}
 		defer file.Close()
+	} else if err != nil {
+		return err
 	}
 
 	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
