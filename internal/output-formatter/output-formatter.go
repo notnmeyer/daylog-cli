@@ -24,6 +24,7 @@ func Format(format, content string) (string, error) {
 	case "markdown", "md":
 		renderer, _ := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(100),
 		)
 
 		var err error
