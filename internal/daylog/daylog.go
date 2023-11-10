@@ -15,22 +15,37 @@ import (
 )
 
 type DayLog struct {
+	// the complete path to the log file
 	Path string
+
+	// the date of the log
+	Date *time.Time
 }
 
 func New(args []string) (*DayLog, error) {
-	file, err := resolveLogPath(args)
+	t, err := parseDateFromArgs(args)
+	if err != nil {
+		return nil, err
+	}
+
+	year, month, day := t.Year(), int(t.Month()), t.Day()
+	file, err := resolveLogPath(year, month, day)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DayLog{
 		Path: file,
+		Date: t,
 	}, nil
 }
 
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
+	if err := createIfMissing(d); err != nil {
+		return err
+	}
+
 	if err := editor.Open(d.Path); err != nil {
 		return err
 	}
@@ -53,14 +68,7 @@ func (d *DayLog) Show(format string) (string, error) {
 }
 
 // returns the complete path to log file
-func resolveLogPath(args []string) (string, error) {
-	t, err := parseDateFromArgs(args)
-	if err != nil {
-		return "", err
-	}
-
-	year, month, day := t.Year(), int(t.Month()), t.Day()
-
+func resolveLogPath(year, month, day int) (string, error) {
 	path, err := createDir(
 		xdg.DataHome,
 		filepath.Join(
@@ -106,4 +114,31 @@ func parseDateFromArgs(args []string) (*time.Time, error) {
 		t := time.Now()
 		return &t, nil
 	}
+}
+
+func createIfMissing(d *DayLog) error {
+	_, err := os.Stat(d.Path)
+	if err == nil {
+		return nil
+	}
+
+	var file *os.File
+	if os.IsNotExist(err) {
+		file, err = os.Create(d.Path)
+		if err != nil {
+			return err
+		}
+		defer file.Close()
+	} else if err != nil {
+		return err
+	}
+
+	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
+	header := fmt.Sprintf("# %d/%d/%d", year, month, day)
+	_, err = file.WriteString(header)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
