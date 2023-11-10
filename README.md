@@ -1,6 +1,6 @@
 # DayLog
 
-Keep track of what you're doing when you do it and forget trying to write summaries at EOD. DayLog[^1] is a dead-simple tool for terminal enthusiasts for taking quick notes throughout your day.
+Keep track of what you're doing when you do it and forget trying to write summaries at EOD. DayLog[^1] is a dead-simple tool for terminal enthusiasts for taking quick notes throughout your day. It helps you quickly edit date-stamped markdown files where you can take notes about what you're doing, leave note in tomorrow's log for your future self
 
 ## Usage
 
@@ -8,7 +8,7 @@ To write or edit today's file, run `daylog` and today's log will be opened in `$
 
 To view today's file, run `daylog show`.
 
-Supply a date to interact with an ealier log, `daylog show -- 2023/01/07`. You can be more casual as well and use dates like "tomorrow", "yesterday", "1 day ago", etc.
+To interact with a past or future log supply a date (`daylog show -- 2023/01/07`), or a more casual realtive reference, "tomorrow", "yesterday", "1 day ago", etc.
 
 ## Installation
 
