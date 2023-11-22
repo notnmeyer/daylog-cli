@@ -8,15 +8,22 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var version, commit string
+type Config struct {
+	Project string
+}
+
+var (
+	version, commit string
+	config          Config
+)
 
 var rootCmd = &cobra.Command{
 	Use:   "daylog",
 	Short: "A tool for keeping track of what you did today",
-	Long:  `DayLog: Fighter of the Night Log!`,
+	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args)
+		dl, err := daylog.New(args, config.Project)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -27,8 +34,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
+// entrypoint
 func Execute(v, c string) {
 	version, commit = v, c
 	err := rootCmd.Execute()
@@ -37,14 +43,11 @@ func Execute(v, c string) {
 	}
 }
 
-// func init() {
-// Here you will define your flags and configuration settings.
-// Cobra supports persistent flags, which, if defined here,
-// will be global for your application.
+func init() {
+	// global flags
+	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
 
-// rootCmd.PersistentFlags().StringVarP(&logDir, "dir", "d", dataDir, "--dir log/directory")
-
-// Cobra also supports local flags, which will only run
-// when this action is called directly.
-// rootCmd.Flags().StringVarP(&logDir, "dir", "d", "./", "--dir log/directory")
-// }
+	// Cobra also supports local flags, which will only run
+	// when this action is called directly.
+	// rootCmd.Flags().StringVarP(&logDir, "dir", "d", "./", "--dir log/directory")
+}

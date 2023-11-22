@@ -10,6 +10,10 @@ To view today's file, run `daylog show`.
 
 To interact with a past or future log supply a date (`daylog show -- 2023/01/07`), or a more casual realtive reference, "tomorrow", "yesterday", "1 day ago", etc.
 
+### Log storage
+
+Logs are stored in `$XDG_DATA_HOME/daylog`.
+
 ## Installation
 
 ### Install a prebuilt binary
