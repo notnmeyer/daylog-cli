@@ -22,14 +22,14 @@ type DayLog struct {
 	Date *time.Time
 }
 
-func New(args []string) (*DayLog, error) {
+func New(args []string, project string) (*DayLog, error) {
 	t, err := parseDateFromArgs(args)
 	if err != nil {
 		return nil, err
 	}
 
 	year, month, day := t.Year(), int(t.Month()), t.Day()
-	file, err := resolveLogPath(year, month, day)
+	file, err := resolveLogPath(project, year, month, day)
 	if err != nil {
 		return nil, err
 	}
@@ -68,11 +68,12 @@ func (d *DayLog) Show(format string) (string, error) {
 }
 
 // returns the complete path to log file
-func resolveLogPath(year, month, day int) (string, error) {
+func resolveLogPath(project string, year, month, day int) (string, error) {
 	path, err := createDir(
 		xdg.DataHome,
 		filepath.Join(
 			"daylog",
+			project,
 			strconv.Itoa(year),
 			fmt.Sprintf("%02d", month),
 			fmt.Sprintf("%02d", day),

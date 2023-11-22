@@ -17,7 +17,7 @@ var showCmd = &cobra.Command{
 	Short: "Display today's log",
 	Long:  "Display today's log",
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args)
+		dl, err := daylog.New(args, config.Project)
 		if err != nil {
 			log.Fatal(err)
 		}
