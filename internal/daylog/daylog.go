@@ -18,6 +18,9 @@ type DayLog struct {
 	// the complete path to the log file
 	Path string
 
+	// the path to the project directory
+	ProjectPath string
+
 	// the date of the log
 	Date *time.Time
 }
@@ -28,15 +31,21 @@ func New(args []string, project string) (*DayLog, error) {
 		return nil, err
 	}
 
+	projectPath, err := projectPath(project)
+	if err != nil {
+		return nil, err
+	}
+
 	year, month, day := t.Year(), int(t.Month()), t.Day()
-	file, err := resolveLogPath(project, year, month, day)
+	file, err := logPath(projectPath, year, month, day)
 	if err != nil {
 		return nil, err
 	}
 
 	return &DayLog{
-		Path: file,
-		Date: t,
+		Path:        file,
+		ProjectPath: projectPath,
+		Date:        t,
 	}, nil
 }
 
@@ -68,12 +77,10 @@ func (d *DayLog) Show(format string) (string, error) {
 }
 
 // returns the complete path to log file
-func resolveLogPath(project string, year, month, day int) (string, error) {
+func logPath(path string, year, month, day int) (string, error) {
 	path, err := createDir(
-		xdg.DataHome,
+		path,
 		filepath.Join(
-			"daylog",
-			project,
 			strconv.Itoa(year),
 			fmt.Sprintf("%02d", month),
 			fmt.Sprintf("%02d", day),
@@ -84,6 +91,21 @@ func resolveLogPath(project string, year, month, day int) (string, error) {
 	}
 
 	return filepath.Join(path, "log.md"), nil
+}
+
+func projectPath(project string) (string, error) {
+	path, err := createDir(
+		xdg.DataHome,
+		filepath.Join(
+			"daylog",
+			project,
+		),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return path, nil
 }
 
 // resolves root path, and creates directories specified in path
