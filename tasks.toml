@@ -1,0 +1,19 @@
+[tasks.deps]
+cmds = [
+  "go mod tidy"
+]
+
+[tasks.build]
+cmds = [
+  "go build -o dist/daylog ./main.go"
+]
+
+[tasks.run]
+cmds = [
+  "go run main.go"
+]
+
+[tasks.test]
+cmds = [
+  "go test ./... -race"
+]
