@@ -5,12 +5,12 @@ cmds = [
 
 [tasks.build]
 cmds = [
-  "go build -o dist/daylog ./main.go"
+  "go build -o dist/daylog ./main.go {{.CLI_ARGS}}"
 ]
 
 [tasks.run]
 cmds = [
-  "go run main.go"
+  "go run main.go {{.CLI_ARGS}}"
 ]
 
 [tasks.test]
