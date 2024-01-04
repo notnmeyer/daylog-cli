@@ -6,27 +6,34 @@ import (
 	"os/exec"
 )
 
-func chooseEditor() string {
+func chooseEditor() (string, error) {
 	if _, exists := os.LookupEnv("EDITOR"); exists {
-		return os.Getenv("EDITOR")
+		return os.Getenv("EDITOR"), nil
 	}
 
 	if _, exists := os.LookupEnv("VISUAL"); exists {
-		return os.Getenv("VISUAL")
+		return os.Getenv("VISUAL"), nil
 	}
 
-	return "nano"
+	if _, err := exec.LookPath("nano"); err != nil {
+		return "nano", nil
+	}
+
+	return "", fmt.Errorf("couldn't find an editor. try setting $EDITOR or $VISUAL to your preferred editor.")
 }
 
 func Open(logFile string) error {
-	editor := chooseEditor()
-	cmd := exec.Command(editor, logFile)
+	editor, err := chooseEditor()
+	if err != nil {
+		return err
+	}
 
+	cmd := exec.Command(editor, logFile)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err := cmd.Start()
+	err = cmd.Start()
 	if err != nil {
 		return fmt.Errorf("Error starting %s: %s", editor, err)
 	}
