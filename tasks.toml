@@ -17,3 +17,9 @@ cmds = [
 cmds = [
   "go test ./... -race"
 ]
+
+[tasks.release]
+cmds = [
+  "git tag {{.CLI_ARGS}}",
+  "git push origin --tags",
+]
