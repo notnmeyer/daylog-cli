@@ -7,11 +7,15 @@ import (
 )
 
 func chooseEditor() string {
-	if _, ok := os.LookupEnv("EDITOR"); ok {
+	if _, exists := os.LookupEnv("EDITOR"); exists {
 		return os.Getenv("EDITOR")
 	}
 
-	return "vim"
+	if _, exists := os.LookupEnv("VISUAL"); exists {
+		return os.Getenv("VISUAL")
+	}
+
+	return "nano"
 }
 
 func Open(logFile string) error {
