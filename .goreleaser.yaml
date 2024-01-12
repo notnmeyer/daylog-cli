@@ -1,7 +1,7 @@
 before:
   hooks:
     - go mod tidy
-    - go generate ./...
+
 builds:
   - env:
       - CGO_ENABLED=0
@@ -22,10 +22,13 @@ archives:
     format_overrides:
     - goos: windows
       format: zip
+
 checksum:
   name_template: 'checksums.txt'
+
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
+
 changelog:
   sort: asc
   filters:
@@ -33,5 +36,13 @@ changelog:
       - '^docs:'
       - '^test:'
 
-# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# vim: set ts=2 sw=2 tw=0 fo=cnqoj
+brews:
+  - name: daylog
+    homepage: "https://github.com/notnmeyer/daylog-cli"
+    description: "Takes notes while you work in your editor of choice."
+    commit_author:
+      name: daylog-bot
+      email: 672246+notnmeyer@users.noreply.github.com
+    repository:
+      owner: notnmeyer
+      name: homebrew-daylog-cli
