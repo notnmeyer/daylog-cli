@@ -24,7 +24,7 @@ archives:
       format: zip
 
 checksum:
-  name_template: 'checksums.txt'
+  name_template: checksums.txt
 
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
@@ -33,16 +33,17 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
+      - "^docs:"
+      - "^test:"
 
 brews:
   - name: daylog
-    homepage: "https://github.com/notnmeyer/daylog-cli"
-    description: "Takes notes while you work in your editor of choice."
+    homepage: https://github.com/notnmeyer/daylog-cli
+    description: Takes notes while you work in your editor of choice.
     commit_author:
       name: daylog-bot
       email: 672246+notnmeyer@users.noreply.github.com
     repository:
       owner: notnmeyer
       name: homebrew-daylog-cli
+      token: "{{ .Env.HOMEBREW_TAP_REPO_GITHUB_TOKEN }}"
