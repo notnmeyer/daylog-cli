@@ -18,28 +18,14 @@ Logs are stored in `$XDG_DATA_HOME/daylog`.
 
 ### Install a prebuilt binary
 
-1. Get the URL for the desired version and platform from the [releases page](https://github.com/notnmeyer/daylog-cli/releases).
-2. Download the release,
-    ```
-    curl -LO https://github.com/notnmeyer/daylog-cli/releases/download/v0.0.3/daylog-cli_Darwin_arm64.tar.gz
-    ```
-    or
-   ```
-   wget https://github.com/notnmeyer/daylog-cli/releases/download/v0.0.3/daylog-cli_Darwin_arm64.tar.gz
-   ```
-4. Extract the tar file, `tar -xzvf daylog-cli_Darwin_arm64.tar.gz`.
-5. Move the `daylog` binary where you want it—`mv daylog ~/bin`, `mv daylog /usr/local/bin/`, etc.
+Via Homebrew,
 
-Or just copy and paste it all,
-
-```shell
-release_version=v0.0.3
-installation_directory=~/bin/
-cd $(mktemp -d)
-curl -LO https://github.com/notnmeyer/daylog-cli/releases/download/$release_version/daylog-cli_Darwin_arm64.tar.gz
-tar -xzvf daylog-cli_Darwin_arm64.tar.gz
-mv daylog "$installation_directory"/
 ```
+brew tap notnmeyer/daylog-cli
+brew install daylog
+```
+
+Or grab a release directly from the [releases page]()
 
 ### Install from source
 
