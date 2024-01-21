@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// infoCmd represents the info command
 var infoCmd = &cobra.Command{
 	Use:   "info",
 	Short: "Display the full path to the logs directory.",
