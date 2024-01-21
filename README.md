@@ -12,7 +12,7 @@ To interact with a past or future log supply a date (`daylog show -- 2023/01/07`
 
 ### Log storage
 
-Logs are stored in `$XDG_DATA_HOME/daylog`.
+Logs are stored in `$XDG_DATA_HOME/daylog`. Use `daylog info` to print the exact directory.
 
 ## Installation
 
