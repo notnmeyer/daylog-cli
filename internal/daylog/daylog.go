@@ -11,6 +11,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
+	"github.com/notnmeyer/daylog-cli/internal/git"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
 )
 
@@ -74,6 +75,31 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
+}
+
+func (d *DayLog) InitGitRepo() error {
+	// check if a repo exists for the project
+	if exists, err := git.RepoExists(d.ProjectPath); exists {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%s already appears to be a git repo\n", d.ProjectPath)
+	}
+
+	// init a new repo
+	repo, err := git.Init(d.ProjectPath)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("initialized Git repository %s\n", repo)
+
+	// make an initial commit with any existing log files
+	err = git.AddAndCommit(d.ProjectPath, ".", "Initial")
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // returns the complete path to log file
