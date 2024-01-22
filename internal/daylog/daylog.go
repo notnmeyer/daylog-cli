@@ -94,7 +94,7 @@ func (d *DayLog) InitGitRepo() error {
 	fmt.Printf("initialized Git repository %s\n", repo)
 
 	// make an initial commit with any existing log files
-	err = git.AddAndCommit(d.ProjectPath, ".", "Initial")
+	err = git.AddAndCommit(d.ProjectPath, ".", "Initial commit")
 	if err != nil {
 		return err
 	}
