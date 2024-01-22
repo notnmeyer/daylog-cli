@@ -60,6 +60,11 @@ func (d *DayLog) Edit() error {
 		return err
 	}
 
+	if d.gitEnabled() {
+		msg := fmt.Sprintf("update log for %d/%d/%d\n", d.Date.Year(), int(d.Date.Month()), d.Date.Day())
+		git.AddAndCommit(d.ProjectPath, d.Path, msg)
+	}
+
 	return nil
 }
 
@@ -100,6 +105,11 @@ func (d *DayLog) InitGitRepo() error {
 	}
 
 	return nil
+}
+
+func (d *DayLog) gitEnabled() bool {
+	exists, _ := git.RepoExists(d.ProjectPath)
+	return exists
 }
 
 // returns the complete path to log file
