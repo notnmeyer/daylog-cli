@@ -1,11 +1,17 @@
 package git
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
+
+type CmdOutput struct {
+	Stdout bytes.Buffer
+	Stderr bytes.Buffer
+}
 
 // returns true if dit contains a git repo
 func RepoExists(dir string) (bool, error) {
@@ -24,53 +30,59 @@ func RepoExists(dir string) (bool, error) {
 	return true, nil
 }
 
-func Init(dir string) (string, error) {
-	err := runCmd("init", dir)
+func Init(dir string) (*CmdOutput, error) {
+	output, err := run(dir, "init")
 	if err != nil {
-		return "", err
+		return output, err
 	}
 
-	return filepath.Join(dir, ".git"), nil
+	return output, nil
 }
 
-func Add(dir, pattern string) error {
-	err := runCmd("-C", dir, "add", pattern)
+func Add(dir, pattern string) (*CmdOutput, error) {
+	output, err := run(dir, "add", pattern)
 	if err != nil {
-		return err
+		return output, err
 	}
 
-	return nil
+	return output, nil
 }
 
-func Commit(dir, msg string) error {
-	err := runCmd("-C", dir, "commit", "-m", msg)
+func Commit(dir, msg string) (*CmdOutput, error) {
+	output, err := run(dir, "commit", "-m", msg)
 	if err != nil {
-		return err
+		return output, err
 	}
 
-	return nil
+	return output, nil
 }
 
-func AddAndCommit(dir, pattern, msg string) error {
-	err := Add(dir, pattern)
+func AddAndCommit(dir, pattern, msg string) (*CmdOutput, error) {
+	output, err := Add(dir, pattern)
 	if err != nil {
-		return err
+		return output, err
 	}
 
-	err = Commit(dir, msg)
+	output, err = Commit(dir, msg)
 	if err != nil {
-		return err
+		return output, err
 	}
 
-	return nil
+	return output, nil
 }
 
 // exec a git command
-func runCmd(args ...string) error {
+func run(path string, args ...string) (*CmdOutput, error) {
+	args = append([]string{"-C", path}, args...)
 	cmd := exec.Command("git", args...)
+
+	var output CmdOutput
+	cmd.Stdout = &output.Stdout
+	cmd.Stderr = &output.Stderr
+
 	if err := cmd.Run(); err != nil {
-		return err
+		return &output, err
 	}
 
-	return nil
+	return &output, nil
 }

@@ -62,7 +62,10 @@ func (d *DayLog) Edit() error {
 
 	if d.gitEnabled() {
 		msg := fmt.Sprintf("update log for %d/%d/%d\n", d.Date.Year(), int(d.Date.Month()), d.Date.Day())
-		git.AddAndCommit(d.ProjectPath, d.Path, msg)
+		output, err := git.AddAndCommit(d.ProjectPath, d.Path, msg)
+		if err != nil {
+			return fmt.Errorf("%s: %s", err, output.Stderr.String())
+		}
 	}
 
 	return nil
@@ -92,17 +95,18 @@ func (d *DayLog) InitGitRepo() error {
 	}
 
 	// init a new repo
-	repo, err := git.Init(d.ProjectPath)
+	output, err := git.Init(d.ProjectPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %s", err, output.Stderr.String())
 	}
-	fmt.Printf("initialized Git repository %s\n", repo)
+	fmt.Println(output.Stdout.String())
 
 	// make an initial commit with any existing log files
-	err = git.AddAndCommit(d.ProjectPath, ".", "Initial commit")
+	output, err = git.AddAndCommit(d.ProjectPath, ".", "Initial commit")
 	if err != nil {
-		return err
+		return fmt.Errorf("%s: %s", err, output.Stderr.String())
 	}
+	fmt.Println(output.Stdout.String())
 
 	return nil
 }
