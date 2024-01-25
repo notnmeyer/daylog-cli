@@ -11,6 +11,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
+	"github.com/notnmeyer/daylog-cli/internal/git"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
 )
 
@@ -59,6 +60,14 @@ func (d *DayLog) Edit() error {
 		return err
 	}
 
+	if d.gitEnabled() {
+		msg := fmt.Sprintf("update log for %d/%d/%d\n", d.Date.Year(), int(d.Date.Month()), d.Date.Day())
+		output, err := git.AddAndCommit(d.ProjectPath, d.Path, msg)
+		if err != nil {
+			return fmt.Errorf("%s: %s", err, output.Stderr.String())
+		}
+	}
+
 	return nil
 }
 
@@ -74,6 +83,30 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
+}
+
+func (d *DayLog) InitGitRepo() error {
+	// check if a repo exists for the project
+	if exists, err := git.RepoExists(d.ProjectPath); exists {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("%s already appears to be a git repo\n", d.ProjectPath)
+	}
+
+	// init a new repo
+	output, err := git.Init(d.ProjectPath)
+	if err != nil {
+		return fmt.Errorf("%s: %s", err, output.Stderr.String())
+	}
+	fmt.Println(output.Stdout.String())
+
+	return nil
+}
+
+func (d *DayLog) gitEnabled() bool {
+	exists, _ := git.RepoExists(d.ProjectPath)
+	return exists
 }
 
 // returns the complete path to log file
