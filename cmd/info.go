@@ -18,7 +18,7 @@ var infoCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		fmt.Printf("Log location: %s\n", dl.ProjectPath)
+		fmt.Println(dl.ProjectPath)
 	},
 }
 
