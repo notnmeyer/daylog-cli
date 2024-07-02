@@ -8,6 +8,11 @@ cmds = [
   "go build -o dist/daylog ./main.go {{.CLI_ARGS}}"
 ]
 
+[tasks."build:demo"]
+cmds = [
+  "nix-shell -p ffmpeg ttyd vhs --run \"vhs demo/demo.tape\"",
+]
+
 [tasks.run]
 cmds = [
   "go run main.go {{.CLI_ARGS}}"
