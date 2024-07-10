@@ -8,8 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-type ShowConfig struct {
-	Output string
+var outputFormats = []string{
+	"markdown", "md",
+	"text",
+	"web",
 }
 
 var showCmd = &cobra.Command{
@@ -27,6 +29,10 @@ var showCmd = &cobra.Command{
 			log.Fatalf(err.Error())
 		}
 
+		if !validOutputFormat(format) {
+			log.Fatalf("output must be one of %v\n", outputFormats)
+		}
+
 		logContents, err := dl.Show(format)
 		if err != nil {
 			log.Fatalf(err.Error())
@@ -39,4 +45,13 @@ var showCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(showCmd)
 	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
+}
+
+func validOutputFormat(format string) bool {
+	for _, v := range outputFormats {
+		if v == format {
+			return true
+		}
+	}
+	return false
 }
