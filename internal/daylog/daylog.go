@@ -1,11 +1,17 @@
 package daylog
 
 import (
+	"encoding/base64"
 	"fmt"
+	"log"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -68,12 +74,69 @@ func (d *DayLog) Show(format string) (string, error) {
 		return "", err
 	}
 
+	if format == "web" {
+		fmt.Printf("opening %s in your browser...", d.Path)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		// start the server in a goroutine
+		go startServer(&wg)
+
+		// build the url and open it in a browser
+		data := base64.StdEncoding.EncodeToString([]byte(contents))
+		url := fmt.Sprintf("http://localhost:8000/show?content=%s", data)
+		open(url)
+
+		// wait until the request has been served
+		wg.Wait()
+
+		return "", nil
+	}
+
 	contents, err = outputFormatter.Format(format, contents)
 	if err != nil {
 		return "", err
 	}
 
 	return contents, nil
+}
+
+// TODO: relocate this
+func startServer(wg *sync.WaitGroup) {
+	server := &http.Server{Addr: ":8000"}
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	http.HandleFunc("/show", func(w http.ResponseWriter, r *http.Request) {
+		defer wg.Done()
+		http.ServeFile(w, r, filepath.Join(dir, "templates/show.html"))
+	})
+
+	if err := server.ListenAndServe(); err != http.ErrServerClosed {
+		log.Fatalf("ListenAndServe(): %v", err)
+	}
+}
+
+// TODO: relocate this
+func open(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		log.Fatalf("Unsupported platform")
+	}
+
+	if err != nil {
+		log.Fatalf("Error opening URL in default browser: %v", err)
+	}
 }
 
 // returns the complete path to log file

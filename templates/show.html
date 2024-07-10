@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown Renderer</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        #content {
+            max-width: 800px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="content"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const base64Content = params.get('content');
+
+            if (!base64Content) {
+                document.getElementById('content').innerText = 'No content provided.';
+                return;
+            }
+
+            try {
+                const markdown = atob(base64Content);
+                document.getElementById('content').innerHTML = marked.parse(markdown);
+            } catch (error) {
+                document.getElementById('content').innerText = 'Error decoding markdown content: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>
