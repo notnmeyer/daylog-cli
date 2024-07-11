@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +17,7 @@ import (
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
+	"github.com/notnmeyer/daylog-cli/internal/server"
 )
 
 type DayLog struct {
@@ -81,11 +81,12 @@ func (d *DayLog) Show(format string) (string, error) {
 		wg.Add(1)
 
 		// start the server in a goroutine
-		go startServer(&wg)
+		go server.Start(&wg)
 
 		// build the url and open it in a browser
 		data := base64.StdEncoding.EncodeToString([]byte(contents))
 		url := fmt.Sprintf("http://localhost:8000/show?content=%s", data)
+		fmt.Println(url)
 		open(url)
 
 		// wait until the request has been served
@@ -100,43 +101,6 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
-}
-
-// TODO: relocate this
-func startServer(wg *sync.WaitGroup) {
-	server := &http.Server{Addr: ":8000"}
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	http.HandleFunc("/show", func(w http.ResponseWriter, r *http.Request) {
-		defer wg.Done()
-		http.ServeFile(w, r, filepath.Join(dir, "templates/show.html"))
-	})
-
-	if err := server.ListenAndServe(); err != http.ErrServerClosed {
-		log.Fatalf("ListenAndServe(): %v", err)
-	}
-}
-
-// TODO: relocate this
-func open(url string) {
-	var err error
-	switch runtime.GOOS {
-	case "linux":
-		err = exec.Command("xdg-open", url).Start()
-	case "windows":
-		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
-	case "darwin":
-		err = exec.Command("open", url).Start()
-	default:
-		log.Fatalf("Unsupported platform")
-	}
-
-	if err != nil {
-		log.Fatalf("Error opening URL in default browser: %v", err)
-	}
 }
 
 // returns the complete path to log file
@@ -227,4 +191,23 @@ func createIfMissing(d *DayLog) error {
 	}
 
 	return nil
+}
+
+// calls "open" or whatever the platform equivilent is on a url
+func open(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		log.Fatalf("Unsupported platform")
+	}
+
+	if err != nil {
+		log.Fatalf("Error opening URL in default browser: %v", err)
+	}
 }
