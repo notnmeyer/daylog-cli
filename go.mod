@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/adrg/xdg v0.4.0
+	github.com/arl/dirtree v0.1.3
 	github.com/charmbracelet/glamour v0.6.0
 	github.com/markusmobius/go-dateparser v1.2.1
 	github.com/spf13/cobra v1.7.0

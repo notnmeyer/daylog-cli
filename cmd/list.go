@@ -1,12 +1,10 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 	"os"
-	"path/filepath"
-	"strings"
 
+	"github.com/arl/dirtree"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -27,9 +25,20 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
-		err = filepath.Walk(dl.ProjectPath, visit(dl.ProjectPath))
+		err = dirtree.Write(
+			os.Stdout,
+			dl.ProjectPath,
+			dirtree.Type("f"),
+			dirtree.ExcludeRoot,
+			dirtree.PrintMode(0),
+			// uhhhhhh, kind of lame
+			dirtree.Ignore(".git/*"),
+			dirtree.Ignore(".git/*/*"),
+			dirtree.Ignore(".git/*/*/*"),
+			dirtree.Ignore(".git/*/*/*/*"),
+		)
 		if err != nil {
-			fmt.Printf("error walking the path %v: %v\n", dl.ProjectPath, err)
+			log.Fatal(err)
 		}
 	},
 }
@@ -46,28 +55,4 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// listCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
-
-func visit(root string) filepath.WalkFunc {
-	rootDepth := strings.Count(root, string(os.PathSeparator))
-
-	return func(path string, info os.FileInfo, err error) error {
-		// print the error, but we want to continue the traversal
-		if err != nil {
-			fmt.Println(err)
-			return nil
-		}
-
-		depth := strings.Count(path, string(os.PathSeparator)) - rootDepth
-
-		var item string
-		if info.IsDir() {
-			item = info.Name() + "/"
-		} else {
-			item = info.Name()
-		}
-
-		fmt.Println(strings.Repeat("  ", depth), item)
-		return nil
-	}
 }
