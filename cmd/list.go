@@ -1,10 +1,14 @@
 package cmd
 
 import (
+	"fmt"
+	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 
-	"github.com/arl/dirtree"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -25,20 +29,34 @@ to quickly create a Cobra application.`,
 			log.Fatal(err)
 		}
 
-		err = dirtree.Write(
-			os.Stdout,
-			dl.ProjectPath,
-			dirtree.Type("f"),
-			dirtree.ExcludeRoot,
-			dirtree.PrintMode(0),
-			// uhhhhhh, kind of lame
-			dirtree.Ignore(".git/*"),
-			dirtree.Ignore(".git/*/*"),
-			dirtree.Ignore(".git/*/*/*"),
-			dirtree.Ignore(".git/*/*/*/*"),
-		)
-		if err != nil {
-			log.Fatal(err)
+		var validFiles []string
+		err = filepath.Walk(dl.ProjectPath, func(path string, info fs.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if path == dl.ProjectPath || info.Name() == ".git" {
+				return nil
+			}
+
+			if info.Mode().IsRegular() {
+				relPath, err := filepath.Rel(dl.ProjectPath, path)
+				if err != nil {
+					return err
+				}
+
+				parts := strings.Split(relPath, string(filepath.Separator))
+				if len(parts) > 0 && isYearDirectory(parts[0]) {
+					if isValidFile(path) {
+						validFiles = append(validFiles, relPath)
+					}
+				}
+			}
+			return nil
+		})
+
+		for _, file := range validFiles {
+			fmt.Println(file)
 		}
 	},
 }
@@ -55,4 +73,24 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// listCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
+
+func isYearDirectory(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+
+	if _, err := strconv.Atoi(s); err != nil {
+		return false
+	}
+
+	return true
+}
+
+func isValidFile(path string) bool {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return len(content) > 0 && strings.TrimSpace(string(content)) != ""
 }
