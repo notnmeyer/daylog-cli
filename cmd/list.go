@@ -3,9 +3,6 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"path"
-	"path/filepath"
-	"strings"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
@@ -23,13 +20,13 @@ var listCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		files, err := file.GetLogFiles(dl.ProjectPath)
+		logs, err := file.GetLogs(dl.ProjectPath)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		for _, file := range files {
-			fmt.Println(convertLogToDisplayName(file))
+		for _, log := range logs {
+			fmt.Println(log)
 		}
 	},
 }
@@ -46,10 +43,4 @@ func init() {
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
 	// listCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
-}
-
-// converts 2025/12/02/log.md to 2025/12/02 which can be used directly when editing or showing a log
-func convertLogToDisplayName(log string) string {
-	split := strings.Split(log, string(filepath.Separator))
-	return path.Join(split[0], split[1], split[2])
 }

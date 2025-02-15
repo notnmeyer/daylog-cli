@@ -3,6 +3,7 @@ package file
 import (
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -29,7 +30,7 @@ func isValidFile(path string) bool {
 	return len(content) > 0 && strings.TrimSpace(string(content)) != ""
 }
 
-func GetLogFiles(projectPath string) ([]string, error) {
+func GetLogs(projectPath string) ([]string, error) {
 	var validFiles []string
 	err := filepath.Walk(projectPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -49,8 +50,9 @@ func GetLogFiles(projectPath string) ([]string, error) {
 			parts := strings.Split(relPath, string(filepath.Separator))
 			if len(parts) > 0 && isYearDirectory(parts[0]) {
 				if isValidFile(path) {
+					log := convertLogToDisplayName(relPath)
 					// insert at the front of the slice
-					validFiles = slices.Insert(validFiles, 0, relPath)
+					validFiles = slices.Insert(validFiles, 0, log)
 				}
 			}
 		}
@@ -60,4 +62,10 @@ func GetLogFiles(projectPath string) ([]string, error) {
 		return nil, err
 	}
 	return validFiles, nil
+}
+
+// converts 2025/12/02/log.md to 2025/12/02 which can be used directly when editing or showing a log
+func convertLogToDisplayName(log string) string {
+	split := strings.Split(log, string(filepath.Separator))
+	return path.Join(split[0], split[1], split[2])
 }

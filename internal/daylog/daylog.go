@@ -185,7 +185,7 @@ func createIfMissing(d *DayLog) error {
 			return err
 		}
 		defer file.Close()
-	} else if err != nil {
+	} else {
 		return err
 	}
 

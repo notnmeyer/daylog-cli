@@ -68,7 +68,7 @@ func TestGetLogFiles(t *testing.T) {
 	// empty file
 	os.Mkdir(filepath.Join(tmpDir, "emptydir"), 0755)
 
-	files, err := GetLogFiles(tmpDir)
+	files, err := GetLogs(tmpDir)
 	if err != nil {
 		t.Fatalf("getLogFiles() error = %v", err)
 	}
@@ -76,5 +76,23 @@ func TestGetLogFiles(t *testing.T) {
 	expectedFiles := []string{"2025/12/02/log.md"}
 	if len(files) != len(expectedFiles) || files[0] != expectedFiles[0] {
 		t.Errorf("getLogFiles() = %v, want %v", files, expectedFiles)
+	}
+}
+
+func TestConvertLogToDisplayName(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"2025/12/02/log.md", "2025/12/02"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := convertLogToDisplayName(tt.input)
+			if result != tt.expected {
+				t.Errorf("convertLogToDisplayName(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
 	}
 }
