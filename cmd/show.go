@@ -35,7 +35,7 @@ var showCmd = &cobra.Command{
 		}
 
 		if showPrevious {
-			prev, err := file.PreviousLog(dl.ProjectPath)
+			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
 			if err != nil {
 				log.Fatal(err)
 			}

@@ -15,27 +15,17 @@ import (
 	"github.com/notnmeyer/daylog-cli/internal/dateutil"
 )
 
-func isYearDirectory(s string) bool {
-	if len(s) != 4 {
-		return false
-	}
-
-	if _, err := strconv.Atoi(s); err != nil {
-		return false
-	}
-
-	return true
+type FileLogProvider interface {
+	GetLogs(string) ([]string, error)
 }
 
-func isValidFile(path string) bool {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return len(content) > 0 && strings.TrimSpace(string(content)) != ""
+type LogProvider struct{}
+
+func NewLogProvider() LogProvider {
+	return LogProvider{}
 }
 
-func GetLogs(projectPath string) ([]string, error) {
+func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 	var validFiles []string
 	err := filepath.Walk(projectPath, func(path string, info fs.FileInfo, err error) error {
 		if err != nil {
@@ -69,10 +59,9 @@ func GetLogs(projectPath string) ([]string, error) {
 	return validFiles, nil
 }
 
-// TODO: write test
-func PreviousLog(path string) (string, error) {
+func PreviousLog(path string, provider FileLogProvider) (string, error) {
 	// get all the logs
-	logs, err := GetLogs(path)
+	logs, err := provider.GetLogs(path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -84,6 +73,26 @@ func PreviousLog(path string) (string, error) {
 	}
 
 	return prev, nil
+}
+
+func isYearDirectory(s string) bool {
+	if len(s) != 4 {
+		return false
+	}
+
+	if _, err := strconv.Atoi(s); err != nil {
+		return false
+	}
+
+	return true
+}
+
+func isValidFile(path string) bool {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	return len(content) > 0 && strings.TrimSpace(string(content)) != ""
 }
 
 // converts 2025/12/02/log.md to 2025/12/02 which can be used directly when editing or showing a log

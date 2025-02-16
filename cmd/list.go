@@ -20,7 +20,7 @@ var listCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		logs, err := file.GetLogs(dl.ProjectPath)
+		logs, err := file.LogProvider{}.GetLogs(dl.ProjectPath)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -11,7 +11,7 @@ type Date struct {
 	Day   int
 }
 
-func GetCurrent() Date {
+var GetCurrent = func() Date {
 	t := time.Now()
 	return Date{Year: t.Year(), Month: int(t.Month()), Day: t.Day()}
 }
