@@ -3,8 +3,10 @@ package cmd
 import (
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
+	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
 )
 
@@ -28,6 +30,19 @@ var rootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
+		showPrevious, err := cmd.PersistentFlags().GetBool("prev")
+		if err != nil {
+			log.Fatalf("%s", err.Error())
+		}
+
+		if showPrevious {
+			prev, err := file.PreviousLog(dl.ProjectPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+		}
+
 		if err := dl.Edit(); err != nil {
 			log.Fatal(err)
 		}
@@ -46,8 +61,5 @@ func Execute(v, c string) {
 func init() {
 	// global flags
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
-
-	// Cobra also supports local flags, which will only run
-	// when this action is called directly.
-	// rootCmd.Flags().StringVarP(&logDir, "dir", "d", "./", "--dir log/directory")
+	rootCmd.PersistentFlags().Bool("prev", false, "Open the most recent log that isn't today's")
 }

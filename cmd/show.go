@@ -29,7 +29,7 @@ var showCmd = &cobra.Command{
 			log.Fatalf("%s", err.Error())
 		}
 
-		showPrevious, err := cmd.PersistentFlags().GetBool("prev")
+		showPrevious, err := cmd.Root().PersistentFlags().GetBool("prev")
 		if err != nil {
 			log.Fatalf("%s", err.Error())
 		}
@@ -54,5 +54,4 @@ var showCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(showCmd)
 	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
-	showCmd.PersistentFlags().Bool("prev", false, "Open the most recent log that isn't today's")
 }
