@@ -61,5 +61,5 @@ func Execute(v, c string) {
 func init() {
 	// global flags
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
-	rootCmd.PersistentFlags().Bool("prev", false, "Open the most recent log that isn't today's")
+	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
 }
