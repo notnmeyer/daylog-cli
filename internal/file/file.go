@@ -1,13 +1,18 @@
 package file
 
 import (
+	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/notnmeyer/daylog-cli/internal/dateutil"
 )
 
 func isYearDirectory(s string) bool {
@@ -64,8 +69,40 @@ func GetLogs(projectPath string) ([]string, error) {
 	return validFiles, nil
 }
 
+func PreviousLog(path string) (string, error) {
+	// get all the logs
+	logs, err := GetLogs(path)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// find the most recent existing log before today
+	prev, exists := findPreviousLog(logs)
+	if !exists {
+		return "", fmt.Errorf("no previous log found")
+	}
+
+	return prev, nil
+}
+
 // converts 2025/12/02/log.md to 2025/12/02 which can be used directly when editing or showing a log
 func convertLogToDisplayName(log string) string {
 	split := strings.Split(log, string(filepath.Separator))
 	return path.Join(split[0], split[1], split[2])
+}
+
+// logs is the list of keys of all logs. each log is YYYY/MM/DD, which the most recent date at index 0
+func findPreviousLog(logs []string) (string, bool) {
+	todayTime, err := time.Parse("2006/01/02", dateutil.GetCurrent().String())
+	if err != nil {
+		return "", false
+	}
+
+	for _, log := range logs {
+		l, err := time.Parse("2006/01/02", log)
+		if err == nil && l.Before(todayTime) {
+			return log, true
+		}
+	}
+	return "", false
 }

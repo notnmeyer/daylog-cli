@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"path/filepath"
 
-	"github.com/notnmeyer/daylog-cli/internal/dateutil"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
@@ -34,25 +34,12 @@ var showCmd = &cobra.Command{
 			log.Fatalf("%s", err.Error())
 		}
 
-		// override the log
 		if showPrevious {
-			// build today's log key
-			today := dateutil.GetCurrent()
-
-			// get all the logs
-			logs, err := file.GetLogs(dl.ProjectPath)
+			prev, err := file.PreviousLog(dl.ProjectPath)
 			if err != nil {
-				log.Fatalf("%s", err.Error())
+				log.Fatal(err)
 			}
-
-			// find the most recent existing log before today
-			prev, exists := getPreviousLog(logs, fmt.Sprintf("%s", today))
-			if !exists {
-				log.Fatalf("no previous log found")
-			}
-
-			// TODO: fix this shit
-			dl.Path = dl.ProjectPath + "/" + prev + "/log.md"
+			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
 		}
 
 		logContents, err := dl.Show(format)
@@ -68,13 +55,4 @@ func init() {
 	rootCmd.AddCommand(showCmd)
 	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
 	showCmd.PersistentFlags().Bool("prev", false, "Open the most recent log that isn't today's")
-}
-
-func getPreviousLog(logs []string, target string) (string, bool) {
-	for i, v := range logs {
-		if v == target && i+1 < len(logs) {
-			return logs[i+1], true
-		}
-	}
-	return "", false
 }
