@@ -69,6 +69,7 @@ func GetLogs(projectPath string) ([]string, error) {
 	return validFiles, nil
 }
 
+// TODO: write test
 func PreviousLog(path string) (string, error) {
 	// get all the logs
 	logs, err := GetLogs(path)
@@ -91,6 +92,7 @@ func convertLogToDisplayName(log string) string {
 	return path.Join(split[0], split[1], split[2])
 }
 
+// TODO: write test
 // logs is the list of keys of all logs. each log is YYYY/MM/DD, which the most recent date at index 0
 func findPreviousLog(logs []string) (string, bool) {
 	todayTime, err := time.Parse("2006/01/02", dateutil.GetCurrent().String())
