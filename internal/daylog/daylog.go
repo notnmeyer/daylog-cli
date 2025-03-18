@@ -195,7 +195,7 @@ func createIfMissing(d *DayLog) error {
 	}
 
 	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
-	header := fmt.Sprintf("# %d/%d/%d", year, month, day)
+	header := fmt.Sprintf("# %d/%02d/%02d", year, month, day)
 	_, err = file.WriteString(header)
 	if err != nil {
 		return err
