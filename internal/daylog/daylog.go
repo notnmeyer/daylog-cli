@@ -159,9 +159,14 @@ func createDir(rootPath, path string) (string, error) {
 }
 
 func parseDateFromArgs(args []string) (*time.Time, error) {
+	tz, _ := time.LoadLocation("Local")
+	cfg := &dateparser.Configuration{
+		DefaultTimezone: tz,
+	}
+
 	if len(args) > 0 {
 		dateString := strings.Join(args, " ")
-		d, err := dateparser.Parse(nil, dateString)
+		d, err := dateparser.Parse(cfg, dateString)
 		if err != nil {
 			return nil, err
 		}
