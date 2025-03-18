@@ -6,8 +6,8 @@ require (
 	github.com/adrg/xdg v0.4.0
 	github.com/arl/dirtree v0.1.3
 	github.com/charmbracelet/glamour v0.6.0
-	github.com/markusmobius/go-dateparser v1.2.1
-	github.com/spf13/cobra v1.7.0
+	github.com/markusmobius/go-dateparser v1.2.3
+	github.com/spf13/cobra v1.8.0
 )
 
 require (
@@ -23,7 +23,7 @@ require (
 	github.com/jalaali/go-jalaali v0.0.0-20210801064154-80525e88d958 // indirect
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/magefile/mage v1.14.0 // indirect
-	github.com/mattn/go-isatty v0.0.16 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.21 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
@@ -36,7 +36,7 @@ require (
 	github.com/yuin/goldmark v1.5.2 // indirect
 	github.com/yuin/goldmark-emoji v1.0.1 // indirect
 	golang.org/x/exp v0.0.0-20220321173239-a90fa8a75705 // indirect
-	golang.org/x/net v0.0.0-20221002022538-bcab6841153b // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/text v0.10.0 // indirect
+	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
 )
