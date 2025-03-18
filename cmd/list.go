@@ -1,44 +1,32 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
-	"os"
 
-	"github.com/arl/dirtree"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
+	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
 )
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "A brief description of your command",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	Short: "list all log files",
+	Long:  "list all log files relative to the project directory",
 	Run: func(cmd *cobra.Command, args []string) {
 		dl, err := daylog.New(args, config.Project)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		err = dirtree.Write(
-			os.Stdout,
-			dl.ProjectPath,
-			dirtree.Type("f"),
-			dirtree.ExcludeRoot,
-			dirtree.PrintMode(0),
-			// uhhhhhh, kind of lame
-			dirtree.Ignore(".git/*"),
-			dirtree.Ignore(".git/*/*"),
-			dirtree.Ignore(".git/*/*/*"),
-			dirtree.Ignore(".git/*/*/*/*"),
-		)
+		logs, err := file.LogProvider{}.GetLogs(dl.ProjectPath)
 		if err != nil {
 			log.Fatal(err)
+		}
+
+		for _, log := range logs {
+			fmt.Println(log)
 		}
 	},
 }
