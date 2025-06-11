@@ -3,7 +3,7 @@
 pkgs.mkShell {
   packages = with pkgs; [
     delve
-    go_1_23
+    go_1_24
     gopls
     goreleaser
   ];
