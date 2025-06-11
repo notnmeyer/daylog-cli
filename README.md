@@ -29,7 +29,7 @@ brew install daylog
 
 Or grab a release directly from the [releases page]()
 
-### Install from source
+### From source
 
 1. Build the project with, `go build -o ~/bin/daylog main.go`, substituting `~/bin/daylog` for a different path if you prefer.
 
@@ -40,3 +40,5 @@ Or grab a release directly from the [releases page]()
     DayyyyyyyyyyLLooooooooog!
     
     ![image](https://github.com/notnmeyer/daylog-cli/assets/672246/949b7eee-aa63-484a-a366-231462ac9563)
+
+If you're building on Linux, you may need to install X11 headers. Depending on your distro that could be `libx11-dev` (Debian/Ubuntu), `libx11-devel` (Fedora/RHEL/CentOS), or `libx11` (arch).
