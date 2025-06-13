@@ -24,8 +24,8 @@ var copyCmd = &cobra.Command{
 			log.Fatalf("%s", err.Error())
 		}
 
-		fmt.Println("Copied to clipboard.")
 		clipboard.Write(clipboard.FmtText, []byte(logContents))
+		fmt.Println("Copied to clipboard.")
 	},
 }
 
