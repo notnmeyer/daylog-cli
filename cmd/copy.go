@@ -24,9 +24,22 @@ var copyCmd = &cobra.Command{
 			log.Fatalf("%s", err.Error())
 		}
 
-		clipboard.Write(clipboard.FmtText, []byte(logContents))
+		err = copy([]byte(logContents))
+		if err != nil {
+			panic(err)
+		}
+
 		fmt.Println("Copied to clipboard.")
 	},
+}
+
+func copy(content []byte) error {
+	err := clipboard.Init()
+	if err != nil {
+		return err
+	}
+	clipboard.Write(clipboard.FmtText, content)
+	return nil
 }
 
 func init() {
