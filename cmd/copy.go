@@ -26,7 +26,7 @@ var copyCmd = &cobra.Command{
 
 		err = copy([]byte(logContents))
 		if err != nil {
-			panic(err)
+			log.Fatalf("Failed to copy to clipboard: %v", err)
 		}
 
 		fmt.Println("Copied to clipboard.")
