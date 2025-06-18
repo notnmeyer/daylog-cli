@@ -2,6 +2,7 @@
 cmds = ["go mod tidy"]
 
 [tasks.build]
+deps = [["deps"]]
 cmds = ["go build -o dist/daylog ./main.go {{.CLI_ARGS}}"]
 
 [tasks."build:demo"]

@@ -3,10 +3,11 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"os/exec"
+	"runtime"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
-	"golang.design/x/clipboard"
 )
 
 var copyCmd = &cobra.Command{
@@ -24,6 +25,12 @@ var copyCmd = &cobra.Command{
 			log.Fatalf("%s", err.Error())
 		}
 
+		// only going to worry about mac for now. this is hard to test on headless linux. help wanted.
+		if runtime.GOOS != "darwin" {
+			msg := fmt.Sprintf("copy not supported on %s\n", runtime.GOOS)
+			log.Fatal(msg)
+		}
+
 		err = copy([]byte(logContents))
 		if err != nil {
 			log.Fatalf("Failed to copy to clipboard: %v", err)
@@ -33,15 +40,48 @@ var copyCmd = &cobra.Command{
 	},
 }
 
+func init() {
+	rootCmd.AddCommand(copyCmd)
+}
+
 func copy(content []byte) error {
-	err := clipboard.Init()
+	var err error = nil
+
+	switch runtime.GOOS {
+	case "darwin":
+		err = pbcopy(content)
+	}
+
+	return err
+}
+
+func pbcopy(content []byte) error {
+	cmd := exec.Command("pbcopy")
+
+	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
-	clipboard.Write(clipboard.FmtText, content)
-	return nil
-}
 
-func init() {
-	rootCmd.AddCommand(copyCmd)
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	_, err = in.Write(content)
+	if err != nil {
+		return err
+	}
+
+	err = in.Close()
+	if err != nil {
+		return err
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
