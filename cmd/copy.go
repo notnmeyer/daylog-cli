@@ -49,7 +49,7 @@ func copy(content []byte) error {
 
 	switch runtime.GOOS {
 	case "darwin":
-		err = pbcopy([]byte(content))
+		err = pbcopy(content)
 	}
 
 	return err
