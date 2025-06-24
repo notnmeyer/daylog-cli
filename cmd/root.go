@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
 
+	"github.com/charmbracelet/fang"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
@@ -52,7 +54,13 @@ var rootCmd = &cobra.Command{
 // entrypoint
 func Execute(v, c string) {
 	version, commit = v, c
-	err := rootCmd.Execute()
+
+	err := fang.Execute(context.TODO(), rootCmd,
+		fang.WithoutManpage(),
+		fang.WithVersion(version),
+		fang.WithCommit(commit),
+	)
+
 	if err != nil {
 		os.Exit(1)
 	}
