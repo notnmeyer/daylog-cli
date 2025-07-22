@@ -84,7 +84,7 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	if format == "web" {
-		fmt.Printf("opening %s in your browser...", d.Path)
+		fmt.Printf("opening \"%s\" in your browser...", d.Path)
 
 		var wg sync.WaitGroup
 		wg.Add(1)
@@ -95,7 +95,7 @@ func (d *DayLog) Show(format string) (string, error) {
 		// build the url and open it in a browser
 		data := base64.StdEncoding.EncodeToString([]byte(contents))
 		url := fmt.Sprintf("http://localhost:8000/show?content=%s", data)
-		fmt.Println(url)
+		// fmt.Println(url)
 		open(url)
 
 		// wait until the request has been served
