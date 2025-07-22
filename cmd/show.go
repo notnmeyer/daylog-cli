@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
@@ -63,10 +64,9 @@ func init() {
 }
 
 func validOutputFormat(format string) bool {
-	for _, v := range outputFormats {
-		if v == format {
-			return true
-		}
+	if slices.Contains(outputFormats, format) {
+		return true
 	}
+
 	return false
 }
