@@ -12,7 +12,7 @@ cmds = ["nix-shell -p ffmpeg ttyd vhs --run \"vhs demo/demo.tape\""]
 cmds = ["go run main.go {{.CLI_ARGS}}"]
 
 [tasks.test]
-cmds = ["go test ./... -race"]
+cmds = ["go test ./... --race {{.CLI_ARGS}}"]
 
 [tasks.release]
 cmds = ["git tag {{.CLI_ARGS}}", "git push origin --tags"]

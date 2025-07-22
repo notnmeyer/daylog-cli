@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daylog - Fighter of the Night Log</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Electrolize:wght@400;600&display=swap"
+    >
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+    >
+    <style>
+        :root {
+            --pico-font-family: 'Electrolize', sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <main class="container" id="content"></main>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const params = new URLSearchParams(window.location.search);
+            const base64Content = params.get('content');
+
+            if (!base64Content) {
+                document.getElementById('content').innerText = 'No content provided.';
+                return;
+            }
+
+            try {
+                const markdown = atob(base64Content);
+                document.getElementById('content').innerHTML = marked.parse(markdown);
+            } catch (error) {
+                document.getElementById('content').innerText = 'Error decoding markdown content: ' + error.message;
+            }
+        });
+    </script>
+</body>
+</html>

@@ -4,14 +4,17 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"slices"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
 )
 
-type ShowConfig struct {
-	Output string
+var outputFormats = []string{
+	"markdown", "md",
+	"text",
+	"web",
 }
 
 var showCmd = &cobra.Command{
@@ -42,6 +45,10 @@ var showCmd = &cobra.Command{
 			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
 		}
 
+		if !validOutputFormat(format) {
+			log.Fatalf("output must be one of %v\n", outputFormats)
+		}
+
 		logContents, err := dl.Show(format)
 		if err != nil {
 			log.Fatalf("%s", err.Error())
@@ -53,5 +60,13 @@ var showCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(showCmd)
-	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
+	showCmd.PersistentFlags().StringP("output", "o", "markdown", fmt.Sprintf("Format output %v", outputFormats))
+}
+
+func validOutputFormat(format string) bool {
+	if slices.Contains(outputFormats, format) {
+		return true
+	}
+
+	return false
 }

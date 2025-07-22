@@ -1,11 +1,16 @@
 package daylog
 
 import (
+	"encoding/base64"
 	"fmt"
+	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/adrg/xdg"
@@ -13,6 +18,7 @@ import (
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/git"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
+	"github.com/notnmeyer/daylog-cli/internal/server"
 )
 
 type DayLog struct {
@@ -75,6 +81,27 @@ func (d *DayLog) Show(format string) (string, error) {
 	contents, err := editor.Read(d.Path)
 	if err != nil {
 		return "", err
+	}
+
+	if format == "web" {
+		fmt.Printf("opening \"%s\" in your browser...", d.Path)
+
+		var wg sync.WaitGroup
+		wg.Add(1)
+
+		// start the server in a goroutine
+		go server.Start(&wg)
+
+		// build the url and open it in a browser
+		data := base64.StdEncoding.EncodeToString([]byte(contents))
+		url := fmt.Sprintf("http://localhost:8000/show?content=%s", data)
+		// fmt.Println(url)
+		open(url)
+
+		// wait until the request has been served
+		wg.Wait()
+
+		return "", nil
 	}
 
 	contents, err = outputFormatter.Format(format, contents)
@@ -202,4 +229,23 @@ func createIfMissing(d *DayLog) error {
 	}
 
 	return nil
+}
+
+// calls "open" or whatever the platform equivilent is on a url
+func open(url string) {
+	var err error
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		log.Fatalf("Unsupported platform")
+	}
+
+	if err != nil {
+		log.Fatalf("Error opening URL in default browser: %v", err)
+	}
 }
