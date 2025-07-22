@@ -29,7 +29,7 @@ brew install daylog
 
 Or grab a release directly from the [releases page]()
 
-### Install from source
+### From source
 
 1. Build the project with, `go build -o ~/bin/daylog main.go`, substituting `~/bin/daylog` for a different path if you prefer.
 

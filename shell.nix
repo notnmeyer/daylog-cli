@@ -3,7 +3,7 @@
 pkgs.mkShell {
   packages = with pkgs; [
     delve
-    go_1_21
+    go_1_24
     gopls
     goreleaser
   ];
@@ -11,4 +11,7 @@ pkgs.mkShell {
   shellHook = ''
     go install github.com/spf13/cobra-cli@latest
   '';
+
+  nativeBuildInputs = [ pkgs.gcc pkgs.pkg-config ];
+  buildInputs = pkgs.lib.optionals pkgs.stdenv.isLinux [ pkgs.xorg.libX11 ];
 }

@@ -1,30 +1,25 @@
 [tasks.deps]
-cmds = [
-  "go mod tidy"
-]
+cmds = ["go mod tidy"]
 
 [tasks.build]
-cmds = [
-  "go build -o dist/daylog ./main.go {{.CLI_ARGS}}"
-]
+deps = [["deps"]]
+cmds = ["go build -o dist/daylog ./main.go {{.CLI_ARGS}}"]
 
 [tasks."build:demo"]
-cmds = [
-  "nix-shell -p ffmpeg ttyd vhs --run \"vhs demo/demo.tape\"",
-]
+cmds = ["nix-shell -p ffmpeg ttyd vhs --run \"vhs demo/demo.tape\""]
 
 [tasks.run]
-cmds = [
-  "go run main.go {{.CLI_ARGS}}"
-]
+cmds = ["go run main.go {{.CLI_ARGS}}"]
 
 [tasks.test]
-cmds = [
-  "go test ./... -race"
-]
+cmds = ["go test ./... -race"]
 
 [tasks.release]
-cmds = [
-  "git tag {{.CLI_ARGS}}",
-  "git push origin --tags",
-]
+cmds = ["git tag {{.CLI_ARGS}}", "git push origin --tags"]
+
+[tasks.release_dry]
+desc = "goreleaser dry run"
+cmds = ["goreleaser release --clean --skip publish --skip validate"]
+
+[tasks."new:command"]
+cmds = ["cobra-cli add {{.CLI_ARGS}}"]
