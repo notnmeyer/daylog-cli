@@ -60,7 +60,7 @@ var showCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(showCmd)
-	showCmd.PersistentFlags().StringP("output", "o", "markdown", "Format output")
+	showCmd.PersistentFlags().StringP("output", "o", "markdown", fmt.Sprintf("Format output %v", outputFormats))
 }
 
 func validOutputFormat(format string) bool {
