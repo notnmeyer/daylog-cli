@@ -33,25 +33,16 @@ var rootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		showPrevious, err := cmd.PersistentFlags().GetBool("prev")
-		if err != nil {
-			log.Fatalf("%s", err.Error())
+		if err := applyPrevFlag(cmd, dl); err != nil {
+			log.Fatal(err)
 		}
 
-		if showPrevious {
-			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
-			if err != nil {
-				log.Fatal(err)
-			}
-			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
-		}
-
-		stat, err := os.Stdin.Stat()
+		piped, err := stdinIsPiped()
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		if (stat.Mode() & os.ModeCharDevice) == 0 {
+		if piped {
 			content, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				log.Fatal(err)
@@ -87,4 +78,28 @@ func init() {
 	// global flags
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
+}
+
+func applyPrevFlag(cmd *cobra.Command, dl *daylog.DayLog) error {
+	showPrevious, err := cmd.PersistentFlags().GetBool("prev")
+	if err != nil {
+		return err
+	}
+	if showPrevious {
+		prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
+		if err != nil {
+			return err
+		}
+		dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+	}
+	return nil
+}
+
+func stdinIsPiped() (bool, error) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false, err
+	}
+	// terminals set ModeCharDevice. pipes don't. so if the bit is zero, we have piped input
+	return (stat.Mode() & os.ModeCharDevice) == 0, nil
 }
