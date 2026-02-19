@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -43,6 +44,22 @@ var rootCmd = &cobra.Command{
 				log.Fatal(err)
 			}
 			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+		}
+
+		stat, err := os.Stdin.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			content, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := dl.Append(string(content)); err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
 
 		if err := dl.Edit(); err != nil {
