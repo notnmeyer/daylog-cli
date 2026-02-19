@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/fang"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
@@ -47,7 +48,8 @@ var rootCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
-			if err := dl.Append(string(content)); err != nil {
+			formatted := formatStdinContent(string(content))
+			if err := dl.Append(formatted); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -93,6 +95,17 @@ func applyPrevFlag(cmd *cobra.Command, dl *daylog.DayLog) error {
 		dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
 	}
 	return nil
+}
+
+func formatStdinContent(content string) string {
+	// if a string like "hello\nworld" is piped, the markdown formatter (the default) will smash
+	// it together like "helloworld". so if there are \n's just make it a code block so the line
+	// breaks render correctly.
+	content = strings.TrimRight(content, "\n")
+	if strings.Contains(content, "\n") {
+		return "```\n" + content + "\n```"
+	}
+	return content
 }
 
 func stdinIsPiped() (bool, error) {
