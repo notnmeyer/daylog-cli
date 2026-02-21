@@ -2,6 +2,7 @@ package outputFormatter
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/charmbracelet/glamour"
 )
@@ -16,7 +17,7 @@ var OutputFormats = append(
 )
 
 func Format(format, content string) (string, error) {
-	if !contains(OutputFormats, format) {
+	if !slices.Contains(OutputFormats, format) {
 		return "", fmt.Errorf("output must be one of %v\n", OutputFormats)
 	}
 
@@ -35,17 +36,4 @@ func Format(format, content string) (string, error) {
 	}
 
 	return content, nil
-}
-
-func isMarkdownFormat() {
-
-}
-
-func contains(list []string, item string) bool {
-	for _, val := range list {
-		if val == item {
-			return true
-		}
-	}
-	return false
 }
