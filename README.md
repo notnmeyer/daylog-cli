@@ -4,34 +4,37 @@ Keep track of what you're doing when you do it and forget trying to write summar
 
 ![demo](./demo.gif)
 
-## Usage
-
-To write or edit today's file, run `daylog` and today's log will be opened in `$EDITOR`.
-
-To view today's file, run `daylog show`.
-
-To interact with a past or future log supply a date (`daylog show -- 2023/01/07`), or a more casual realtive reference, "tomorrow", "yesterday", "1 day ago", etc.
-
-### Log storage
-
-Logs are stored in `$XDG_DATA_HOME/daylog`. Use `daylog info` to print the exact directory.
-
 ## Installation
 
-### Install a prebuilt binary
-
-Via Homebrew,
-
+### Homebrew
 ```
 brew tap notnmeyer/daylog-cli
 brew install daylog
 ```
 
-Or grab a release directly from the [releases page]()
+### Releases
+Grab a release directly from the [releases page]()
 
 ### From source
+`go build -o ~/bin/daylog main.go`, substituting `~/bin/daylog` for a different path if you prefer.
 
-1. Build the project with, `go build -o ~/bin/daylog main.go`, substituting `~/bin/daylog` for a different path if you prefer.
+## Usage
+
+To write or edit today's log, run `daylog` and today's log will be opened in `$EDITOR`.
+
+To view today's log, run `daylog show`.
+
+To interact with a past or future log supply a date (`daylog show -- 2023/01/07`), or a more casual realtive reference, "tomorrow", "yesterday", "1 day ago", etc.
+
+You can pipe updates as well, `echo "- ate a burrito" | daylog`.
+
+For other commands and options see, `daylog --help`.
+
+### Log storage
+
+Logs are stored in `$XDG_DATA_HOME/daylog`. Use `daylog info` to print the exact directory.
+
+---
 
 [^1]: DayLog ah ahh ahhhhhh, fighter of the night log ah ahh ahhhhh.
 
