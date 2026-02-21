@@ -2,9 +2,11 @@ package cmd
 
 import (
 	"context"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/fang"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
@@ -32,17 +34,25 @@ var rootCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		showPrevious, err := cmd.PersistentFlags().GetBool("prev")
-		if err != nil {
-			log.Fatalf("%s", err.Error())
+		if err := applyPrevFlag(cmd, dl); err != nil {
+			log.Fatal(err)
 		}
 
-		if showPrevious {
-			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
+		piped, err := stdinIsPiped()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if piped {
+			content, err := io.ReadAll(os.Stdin)
 			if err != nil {
 				log.Fatal(err)
 			}
-			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+			formatted := formatStdinContent(string(content))
+			if err := dl.Append(formatted); err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
 
 		if err := dl.Edit(); err != nil {
@@ -70,4 +80,39 @@ func init() {
 	// global flags
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
+}
+
+func applyPrevFlag(cmd *cobra.Command, dl *daylog.DayLog) error {
+	showPrevious, err := cmd.PersistentFlags().GetBool("prev")
+	if err != nil {
+		return err
+	}
+	if showPrevious {
+		prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
+		if err != nil {
+			return err
+		}
+		dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+	}
+	return nil
+}
+
+func formatStdinContent(content string) string {
+	// if a string like "hello\nworld" is piped, the markdown formatter (the default) will smash
+	// it together like "helloworld". so if there are \n's just make it a code block so the line
+	// breaks render correctly.
+	content = strings.TrimRight(content, "\n")
+	if strings.Contains(content, "\n") {
+		return "```\n" + content + "\n```"
+	}
+	return content
+}
+
+func stdinIsPiped() (bool, error) {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false, err
+	}
+	// terminals set ModeCharDevice. pipes don't. so if the bit is zero, we have piped input
+	return (stat.Mode() & os.ModeCharDevice) == 0, nil
 }

@@ -50,6 +50,38 @@ func New(args []string, project string) (*DayLog, error) {
 	}, nil
 }
 
+// append content to the log for the specified date
+func (d *DayLog) Append(content string) error {
+	if err := createIfMissing(d); err != nil {
+		return err
+	}
+
+	existing, err := os.ReadFile(d.Path)
+	if err != nil {
+		return err
+	}
+
+	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
+		existing = append(existing, '\n')
+	}
+
+	content = strings.TrimRight(content, "\n") + "\n"
+
+	if err := os.WriteFile(d.Path, append(existing, []byte(content)...), 0644); err != nil {
+		return err
+	}
+
+	if d.gitEnabled() {
+		msg := fmt.Sprintf("update log for %d/%d/%d\n", d.Date.Year(), int(d.Date.Month()), d.Date.Day())
+		output, err := git.AddAndCommit(d.ProjectPath, d.Path, msg)
+		if err != nil {
+			return fmt.Errorf("%s: %s", err, output.Stderr.String())
+		}
+	}
+
+	return nil
+}
+
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
 	if err := createIfMissing(d); err != nil {
@@ -195,7 +227,7 @@ func createIfMissing(d *DayLog) error {
 	}
 
 	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
-	header := fmt.Sprintf("# %d/%02d/%02d", year, month, day)
+	header := fmt.Sprintf("# %d/%02d/%02d\n\n", year, month, day)
 	_, err = file.WriteString(header)
 	if err != nil {
 		return err
