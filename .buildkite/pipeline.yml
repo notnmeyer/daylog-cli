@@ -1,0 +1,10 @@
+image: "sorchaabel/golang-pipeline-example:1.0"
+steps:
+  - label: ":go: Run tests"
+    command: |
+      go version
+      go test -v ./...
+
+  - label: ":mag: Run go vet"
+    command: |
+      go vet ./...
