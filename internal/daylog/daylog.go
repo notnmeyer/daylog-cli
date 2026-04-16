@@ -141,17 +141,46 @@ func createIfMissing(d *DayLog) error {
 		return err
 	}
 
-	file, err := os.Create(d.Path)
+	f, err := os.Create(d.Path)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer f.Close()
 
 	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
 	header := fmt.Sprintf("# %d/%02d/%02d\n\n", year, month, day)
-	if _, err := file.WriteString(header); err != nil {
+	if _, err := f.WriteString(header); err != nil {
 		return err
 	}
 
+	if todos := carryOverTodos(d.ProjectPath, *d.Date); len(todos) > 0 {
+		_, err = f.WriteString(strings.Join(todos, "\n") + "\n")
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// carryOverTodos reads the previous log and returns any lines containing "TODO".
+func carryOverTodos(projectPath string, now time.Time) []string {
+	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), now)
+	if err != nil {
+		return nil
+	}
+
+	prevPath := filepath.Join(projectPath, prev, "log.md")
+	content, err := os.ReadFile(prevPath)
+	if err != nil {
+		return nil
+	}
+
+	var todos []string
+	for _, line := range strings.Split(string(content), "\n") {
+		if strings.Contains(line, "TODO") {
+			todos = append(todos, line)
+		}
+	}
+	return todos
 }
