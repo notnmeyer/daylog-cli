@@ -68,15 +68,15 @@ func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 	return validFiles, nil
 }
 
-func PreviousLog(path string, provider FileLogProvider, now time.Time) (string, error) {
+func PreviousLog(path string, provider FileLogProvider, before time.Time) (string, error) {
 	// get all the logs
 	logs, err := provider.GetLogs(path)
 	if err != nil {
 		return "", err
 	}
 
-	// find the most recent existing log before today
-	prev, exists := findPreviousLog(logs, now)
+	// find the most recent existing log before the given date
+	prev, exists := findPreviousLog(logs, before)
 	if !exists {
 		return "", fmt.Errorf("no previous log found")
 	}
@@ -102,15 +102,13 @@ func convertLogToDisplayName(log string) string {
 	return path.Join(split[0], split[1], split[2])
 }
 
-// logs is the list of keys of all logs. each log is YYYY/MM/DD, which the most recent date at index 0
-func findPreviousLog(logs []string, now time.Time) (string, bool) {
-	today := now.Format("2006/01/02")
-
+// logs is the list of keys of all logs. each log is YYYY/MM/DD, with the most recent date at index 0
+func findPreviousLog(logs []string, before time.Time) (string, bool) {
+	// Compare dates only so time-of-day doesn't affect the result
+	beforeDate := time.Date(before.Year(), before.Month(), before.Day(), 0, 0, 0, 0, time.UTC)
 	for _, log := range logs {
-		if _, err := time.Parse("2006/01/02", log); err != nil {
-			continue
-		}
-		if log < today {
+		l, err := time.Parse("2006/01/02", log)
+		if err == nil && l.Before(beforeDate) {
 			return log, true
 		}
 	}

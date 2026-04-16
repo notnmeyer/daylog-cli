@@ -104,6 +104,10 @@ func (d *DayLog) Edit() error {
 }
 
 func (d *DayLog) Show(format string) (string, error) {
+	if err := createIfMissing(d); err != nil {
+		return "", err
+	}
+
 	contents, err := editor.Read(d.Path)
 	if err != nil {
 		return "", err
@@ -163,9 +167,9 @@ func createIfMissing(d *DayLog) error {
 	return nil
 }
 
-// carryOverTodos reads the previous log and returns any lines containing "TODO".
-func carryOverTodos(projectPath string, now time.Time) []string {
-	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), now)
+// carryOverTodos reads the log before `before` and returns any lines containing "TODO".
+func carryOverTodos(projectPath string, before time.Time) []string {
+	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), before)
 	if err != nil {
 		return nil
 	}

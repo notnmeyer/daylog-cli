@@ -114,7 +114,7 @@ func TestConvertLogToDisplayName(t *testing.T) {
 }
 
 func TestPreviousLog(t *testing.T) {
-	now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
+	before := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -147,7 +147,7 @@ func TestPreviousLog(t *testing.T) {
 			logs: tt.logs,
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			prev, err := PreviousLog("mock/path", provider, now)
+			prev, err := PreviousLog("mock/path", provider, before)
 			if err != nil && err.Error() != tt.err.Error() {
 				t.Errorf("findPreviousLog(%v) = found: %v, want: %v", tt.logs, err, tt.err)
 			}
@@ -172,7 +172,7 @@ func TestPreviousLog_PropagatesProviderError(t *testing.T) {
 }
 
 func TestFindPreviousLog(t *testing.T) {
-	now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
+	before := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -214,7 +214,7 @@ func TestFindPreviousLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prev, found := findPreviousLog(tt.logs, now)
+			prev, found := findPreviousLog(tt.logs, before)
 			if found != tt.found {
 				t.Errorf("findPreviousLog(%v) = found: %v, want: %v", tt.logs, found, tt.found)
 			}
