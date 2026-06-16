@@ -11,8 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/notnmeyer/daylog-cli/internal/dateutil"
 )
 
 type FileLogProvider interface {
@@ -59,7 +57,7 @@ func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 	return validFiles, nil
 }
 
-func PreviousLog(path string, provider FileLogProvider) (string, error) {
+func PreviousLog(path string, provider FileLogProvider, now time.Time) (string, error) {
 	// get all the logs
 	logs, err := provider.GetLogs(path)
 	if err != nil {
@@ -67,7 +65,7 @@ func PreviousLog(path string, provider FileLogProvider) (string, error) {
 	}
 
 	// find the most recent existing log before today
-	prev, exists := findPreviousLog(logs)
+	prev, exists := findPreviousLog(logs, now)
 	if !exists {
 		return "", fmt.Errorf("no previous log found")
 	}
@@ -102,15 +100,14 @@ func convertLogToDisplayName(log string) string {
 }
 
 // logs is the list of keys of all logs. each log is YYYY/MM/DD, which the most recent date at index 0
-func findPreviousLog(logs []string) (string, bool) {
-	todayTime, err := time.Parse("2006/01/02", dateutil.GetCurrent().String())
-	if err != nil {
-		return "", false
-	}
+func findPreviousLog(logs []string, now time.Time) (string, bool) {
+	today := now.Format("2006/01/02")
 
 	for _, log := range logs {
-		l, err := time.Parse("2006/01/02", log)
-		if err == nil && l.Before(todayTime) {
+		if _, err := time.Parse("2006/01/02", log); err != nil {
+			continue
+		}
+		if log < today {
 			return log, true
 		}
 	}

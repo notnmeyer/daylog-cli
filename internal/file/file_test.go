@@ -5,8 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/notnmeyer/daylog-cli/internal/dateutil"
+	"time"
 )
 
 type mockLogProvider struct {
@@ -110,13 +109,7 @@ func TestConvertLogToDisplayName(t *testing.T) {
 }
 
 func TestPreviousLog(t *testing.T) {
-	dateutil.GetCurrent = func() dateutil.Date {
-		return dateutil.Date{
-			Year:  2025,
-			Month: 12,
-			Day:   2,
-		}
-	}
+	now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -149,7 +142,7 @@ func TestPreviousLog(t *testing.T) {
 			logs: tt.logs,
 		}
 		t.Run(tt.name, func(t *testing.T) {
-			prev, err := PreviousLog("mock/path", provider)
+			prev, err := PreviousLog("mock/path", provider, now)
 			if err != nil && err.Error() != tt.err.Error() {
 				t.Errorf("findPreviousLog(%v) = found: %v, want: %v", tt.logs, err, tt.err)
 			}
@@ -161,13 +154,7 @@ func TestPreviousLog(t *testing.T) {
 }
 
 func TestFindPreviousLog(t *testing.T) {
-	dateutil.GetCurrent = func() dateutil.Date {
-		return dateutil.Date{
-			Year:  2025,
-			Month: 12,
-			Day:   2,
-		}
-	}
+	now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
 
 	tests := []struct {
 		name     string
@@ -209,7 +196,7 @@ func TestFindPreviousLog(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			prev, found := findPreviousLog(tt.logs)
+			prev, found := findPreviousLog(tt.logs, now)
 			if found != tt.found {
 				t.Errorf("findPreviousLog(%v) = found: %v, want: %v", tt.logs, found, tt.found)
 			}

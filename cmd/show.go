@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"time"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/file"
@@ -40,7 +41,7 @@ var showCmd = &cobra.Command{
 		}
 
 		if showPrevious {
-			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{})
+			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{}, time.Now())
 			if err != nil {
 				log.Fatal(err)
 			}
