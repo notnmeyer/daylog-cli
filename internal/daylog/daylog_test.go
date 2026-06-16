@@ -197,3 +197,50 @@ func TestNew_DoesNotCreateDateSubdir(t *testing.T) {
 		t.Errorf("dl.ProjectPath = %q, want %q", dl.ProjectPath, base)
 	}
 }
+
+func TestUsePrevious(t *testing.T) {
+	t.Run("mutates Path to the most recent log before now", func(t *testing.T) {
+		project := t.TempDir()
+
+		prevDir := filepath.Join(project, "2025/12/01")
+		if err := os.MkdirAll(prevDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(prevDir, "log.md"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+
+		dl := &DayLog{
+			Path:        filepath.Join(project, "2025/12/02/log.md"),
+			ProjectPath: project,
+		}
+		now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
+
+		if err := dl.UsePrevious(now); err != nil {
+			t.Fatalf("UsePrevious: %v", err)
+		}
+
+		want := filepath.Join(project, "2025/12/01/log.md")
+		if dl.Path != want {
+			t.Errorf("dl.Path = %q, want %q", dl.Path, want)
+		}
+	})
+
+	t.Run("returns error when no previous log exists", func(t *testing.T) {
+		project := t.TempDir()
+		dl := &DayLog{
+			Path:        filepath.Join(project, "2025/12/02/log.md"),
+			ProjectPath: project,
+		}
+		now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
+
+		if err := dl.UsePrevious(now); err == nil {
+			t.Errorf("UsePrevious() err = nil, want non-nil")
+		}
+		// Path should not have been mutated on error.
+		want := filepath.Join(project, "2025/12/02/log.md")
+		if dl.Path != want {
+			t.Errorf("dl.Path = %q, want unchanged %q", dl.Path, want)
+		}
+	})
+}

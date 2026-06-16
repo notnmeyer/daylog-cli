@@ -3,11 +3,9 @@ package cmd
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
-	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
 )
 
@@ -41,11 +39,9 @@ var showCmd = &cobra.Command{
 		}
 
 		if showPrevious {
-			prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{}, time.Now())
-			if err != nil {
+			if err := dl.UsePrevious(time.Now()); err != nil {
 				log.Fatal(err)
 			}
-			dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
 		}
 
 		logContents, err := dl.Show(format)

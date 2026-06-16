@@ -5,13 +5,11 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/fang"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
-	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/spf13/cobra"
 )
 
@@ -94,11 +92,7 @@ func applyPrevFlag(cmd *cobra.Command, dl *daylog.DayLog) error {
 		return err
 	}
 	if showPrevious {
-		prev, err := file.PreviousLog(dl.ProjectPath, file.LogProvider{}, time.Now())
-		if err != nil {
-			return err
-		}
-		dl.Path = filepath.Join(dl.ProjectPath, prev, "log.md")
+		return dl.UsePrevious(time.Now())
 	}
 	return nil
 }

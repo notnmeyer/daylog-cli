@@ -11,6 +11,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
+	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
 )
 
@@ -120,6 +121,16 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
+}
+
+// UsePrevious mutates d.Path to point at the most recent log before now.
+func (d *DayLog) UsePrevious(now time.Time) error {
+	prev, err := file.PreviousLog(d.ProjectPath, file.LogProvider{}, now)
+	if err != nil {
+		return err
+	}
+	d.Path = filepath.Join(d.ProjectPath, prev, "log.md")
+	return nil
 }
 
 func parseDateFromArgs(args []string) (*time.Time, error) {

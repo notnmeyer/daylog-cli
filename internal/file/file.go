@@ -3,7 +3,6 @@ package file
 import (
 	"fmt"
 	"io/fs"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -61,7 +60,7 @@ func PreviousLog(path string, provider FileLogProvider, now time.Time) (string, 
 	// get all the logs
 	logs, err := provider.GetLogs(path)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	// find the most recent existing log before today

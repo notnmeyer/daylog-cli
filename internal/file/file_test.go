@@ -153,6 +153,19 @@ func TestPreviousLog(t *testing.T) {
 	}
 }
 
+func TestPreviousLog_PropagatesProviderError(t *testing.T) {
+	provider := &mockLogProvider{
+		err: fmt.Errorf("disk on fire"),
+	}
+	_, err := PreviousLog("mock/path", provider, time.Now())
+	if err == nil {
+		t.Errorf("PreviousLog() err = nil, want non-nil when provider fails")
+	}
+	if err != nil && err.Error() != "disk on fire" {
+		t.Errorf("PreviousLog() err = %q, want %q", err.Error(), "disk on fire")
+	}
+}
+
 func TestFindPreviousLog(t *testing.T) {
 	now := time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC)
 
