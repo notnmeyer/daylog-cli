@@ -39,28 +39,6 @@ func TestIsYearDirectory(t *testing.T) {
 	}
 }
 
-func TestIsValidFile(t *testing.T) {
-	tmpFile, err := os.CreateTemp("", "testlog.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(tmpFile.Name())
-
-	if isValidFile(tmpFile.Name()) {
-		t.Errorf("expected false for empty file")
-	}
-
-	content := "ate a burrito"
-	if _, err := tmpFile.WriteString(content); err != nil {
-		t.Fatal(err)
-	}
-	tmpFile.Close()
-
-	if !isValidFile(tmpFile.Name()) {
-		t.Errorf("expected true for non-empty file")
-	}
-}
-
 func TestGetLogFiles(t *testing.T) {
 	tmpDir := t.TempDir()
 	os.MkdirAll(filepath.Join(tmpDir, "2025/12/02"), 0755)
@@ -87,6 +65,33 @@ func TestGetLogFiles(t *testing.T) {
 	expectedFiles := []string{"2025/12/02"}
 	if len(files) != len(expectedFiles) || files[0] != expectedFiles[0] {
 		t.Errorf("getLogFiles() = %v, want %v", files, expectedFiles)
+	}
+}
+
+func TestGetLogFiles_DescendingOrder(t *testing.T) {
+	tmpDir := t.TempDir()
+	for _, d := range []string{"2025/11/30", "2025/12/02", "2025/12/01"} {
+		if err := os.MkdirAll(filepath.Join(tmpDir, d), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(tmpDir, d, "log.md"), []byte("x"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := LogProvider{}.GetLogs(tmpDir)
+	if err != nil {
+		t.Fatalf("getLogFiles() error = %v", err)
+	}
+
+	want := []string{"2025/12/02", "2025/12/01", "2025/11/30"}
+	if len(files) != len(want) {
+		t.Fatalf("getLogFiles() = %v, want %v", files, want)
+	}
+	for i, w := range want {
+		if files[i] != w {
+			t.Errorf("getLogFiles()[%d] = %q, want %q", i, files[i], w)
+		}
 	}
 }
 

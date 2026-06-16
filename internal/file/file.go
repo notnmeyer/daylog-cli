@@ -3,7 +3,6 @@ package file
 import (
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -24,7 +23,7 @@ func NewLogProvider() LogProvider {
 
 func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 	var validFiles []string
-	err := filepath.Walk(projectPath, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.WalkDir(projectPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -33,26 +32,39 @@ func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 			return nil
 		}
 
-		if info.Mode().IsRegular() {
-			relPath, err := filepath.Rel(projectPath, path)
-			if err != nil {
-				return err
-			}
-
-			parts := strings.Split(relPath, string(filepath.Separator))
-			if len(parts) > 0 && isYearDirectory(parts[0]) {
-				if isValidFile(path) {
-					log := convertLogToDisplayName(relPath)
-					// insert at the front of the slice
-					validFiles = slices.Insert(validFiles, 0, log)
-				}
-			}
+		if !d.Type().IsRegular() {
+			return nil
 		}
+
+		relPath, err := filepath.Rel(projectPath, path)
+		if err != nil {
+			return err
+		}
+
+		parts := strings.Split(relPath, string(filepath.Separator))
+		if len(parts) == 0 || !isYearDirectory(parts[0]) {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Size() == 0 {
+			return nil
+		}
+
+		validFiles = append(validFiles, convertLogToDisplayName(relPath))
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
+
+	// most recent first; YYYY/MM/DD strings sort chronologically with regular comparison
+	slices.SortFunc(validFiles, func(a, b string) int {
+		return strings.Compare(b, a)
+	})
 	return validFiles, nil
 }
 
@@ -82,14 +94,6 @@ func isYearDirectory(s string) bool {
 	}
 
 	return true
-}
-
-func isValidFile(path string) bool {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	return len(content) > 0 && strings.TrimSpace(string(content)) != ""
 }
 
 // converts 2025/12/02/log.md to 2025/12/02 which can be used directly when editing or showing a log
