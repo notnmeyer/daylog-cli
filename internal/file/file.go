@@ -32,7 +32,7 @@ func (LogProvider) GetLogs(projectPath string) ([]string, error) {
 			return err
 		}
 
-		if path == projectPath || info.Name() == ".git" {
+		if path == projectPath {
 			return nil
 		}
 
