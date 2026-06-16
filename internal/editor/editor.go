@@ -15,7 +15,7 @@ func chooseEditor() (string, error) {
 		return os.Getenv("VISUAL"), nil
 	}
 
-	if _, err := exec.LookPath("nano"); err != nil {
+	if _, err := exec.LookPath("nano"); err == nil {
 		return "nano", nil
 	}
 
