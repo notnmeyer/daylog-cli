@@ -1,8 +1,10 @@
 package daylog
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -89,3 +91,109 @@ func TestAppend(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+func TestProjectPathAt(t *testing.T) {
+	t.Run("returns path under base", func(t *testing.T) {
+		base := t.TempDir()
+		got, err := projectPathAt(base, "myproject")
+		if err != nil {
+			t.Fatalf("projectPathAt: %v", err)
+		}
+		want := filepath.Join(base, "daylog", "myproject")
+		if got != want {
+			t.Errorf("projectPathAt() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("does not create directories", func(t *testing.T) {
+		base := t.TempDir()
+		nonExistentBase := filepath.Join(base, "no-such-parent")
+
+		got, err := projectPathAt(nonExistentBase, "myproject")
+		if err != nil {
+			t.Fatalf("projectPathAt: %v", err)
+		}
+
+		want := filepath.Join(nonExistentBase, "daylog", "myproject")
+		if got != want {
+			t.Errorf("projectPathAt() = %q, want %q", got, want)
+		}
+
+		if _, err := os.Stat(nonExistentBase); !os.IsNotExist(err) {
+			t.Errorf("projectPathAt() created base %q; should be read-only", nonExistentBase)
+		}
+		if _, err := os.Stat(want); !os.IsNotExist(err) {
+			t.Errorf("projectPathAt() created %q; should be read-only", want)
+		}
+	})
+}
+
+func TestEnsureProjectPathAt(t *testing.T) {
+	t.Run("creates directory with 0755", func(t *testing.T) {
+		base := t.TempDir()
+
+		got, err := ensureProjectPathAt(base, "myproject")
+		if err != nil {
+			t.Fatalf("ensureProjectPathAt: %v", err)
+		}
+		want := filepath.Join(base, "daylog", "myproject")
+		if got != want {
+			t.Errorf("ensureProjectPathAt() = %q, want %q", got, want)
+		}
+
+		info, err := os.Stat(want)
+		if err != nil {
+			t.Fatalf("stat %q: %v", want, err)
+		}
+		if !info.IsDir() {
+			t.Errorf("%q is not a directory", want)
+		}
+		if perm := info.Mode().Perm(); perm != 0755 {
+			t.Errorf("perm = %o, want 0755", perm)
+		}
+	})
+
+	t.Run("idempotent on existing directory", func(t *testing.T) {
+		base := t.TempDir()
+
+		first, err := ensureProjectPathAt(base, "myproject")
+		if err != nil {
+			t.Fatalf("first ensureProjectPathAt: %v", err)
+		}
+		second, err := ensureProjectPathAt(base, "myproject")
+		if err != nil {
+			t.Fatalf("second ensureProjectPathAt: %v", err)
+		}
+		if first != second {
+			t.Errorf("paths differ: %q vs %q", first, second)
+		}
+	})
+}
+
+// regression: --prev previously created today's tree as a side effect
+func TestNew_DoesNotCreateDateSubdir(t *testing.T) {
+	base := t.TempDir()
+
+	dl, err := New(nil, base)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	today := time.Now()
+	yearDir := filepath.Join(base, strconv.Itoa(today.Year()))
+	if _, err := os.Stat(yearDir); !os.IsNotExist(err) {
+		t.Errorf("New() created date subdir %q; should be lazy", yearDir)
+	}
+
+	wantLogFile := filepath.Join(base, strconv.Itoa(today.Year()),
+		fmt.Sprintf("%02d", int(today.Month())),
+		fmt.Sprintf("%02d", today.Day()),
+		"log.md")
+	if dl.Path != wantLogFile {
+		t.Errorf("dl.Path = %q, want %q", dl.Path, wantLogFile)
+	}
+
+	if dl.ProjectPath != base {
+		t.Errorf("dl.ProjectPath = %q, want %q", dl.ProjectPath, base)
+	}
+}

@@ -15,7 +15,12 @@ var copyCmd = &cobra.Command{
 	Short: "Copy the specified log to the clipboard",
 	Long:  "Copy the specified log to the clipboard",
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args, config.Project)
+		projectPath, err := daylog.EnsureProjectPath(config.Project)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dl, err := daylog.New(args, projectPath)
 		if err != nil {
 			log.Fatal(err)
 		}

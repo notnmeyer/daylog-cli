@@ -13,12 +13,12 @@ var infoCmd = &cobra.Command{
 	Short: "Display the full path to the logs directory.",
 	Long:  "Display the full path to the logs directory.",
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args, config.Project)
+		projectPath, err := daylog.ProjectPath(config.Project)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		fmt.Println(dl.ProjectPath)
+		fmt.Println(projectPath)
 	},
 }
 

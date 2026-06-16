@@ -15,7 +15,12 @@ var listCmd = &cobra.Command{
 	Short: "list all log files",
 	Long:  "list all log files relative to the project directory",
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args, config.Project)
+		projectPath, err := daylog.EnsureProjectPath(config.Project)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dl, err := daylog.New(args, projectPath)
 		if err != nil {
 			log.Fatal(err)
 		}

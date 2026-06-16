@@ -29,7 +29,12 @@ var rootCmd = &cobra.Command{
 	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
 
 	Run: func(cmd *cobra.Command, args []string) {
-		dl, err := daylog.New(args, config.Project)
+		projectPath, err := daylog.EnsureProjectPath(config.Project)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dl, err := daylog.New(args, projectPath)
 		if err != nil {
 			log.Fatal(err)
 		}

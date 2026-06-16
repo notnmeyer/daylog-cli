@@ -58,8 +58,8 @@ func TestRead(t *testing.T) {
 		if err := os.WriteFile(path, []byte("x"), 0000); err != nil {
 			t.Fatalf("setup: %v", err)
 		}
-		// On some platforms (notably Windows) mode 0000 is still readable
-		// by the owning user. Skip the readability assertion in that case.
+		// on some platforms (notably Windows) mode 0000 is still readable
+		// by the owning user. skip the readability assertion in that case
 		if _, err := os.ReadFile(path); err == nil {
 			t.Skip("platform does not enforce 0000 for owner; cannot test unreadable-file path")
 		}
@@ -75,14 +75,14 @@ func TestRead(t *testing.T) {
 }
 
 // withPath returns a t.Cleanup that replaces $PATH with dir prepended to the
-// existing PATH, restoring the original on test exit.
+// existing PATH, restoring the original on test exit
 func withPath(t *testing.T, dir string) {
 	t.Helper()
 	orig := os.Getenv("PATH")
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+orig)
 }
 
-// withFakeNano creates an executable named "nano" inside dir. Returns dir.
+// withFakeNano creates an executable named "nano" inside dir. returns dir
 func withFakeNano(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -95,7 +95,7 @@ func withFakeNano(t *testing.T) string {
 
 // unsetenv removes key from the environment for the duration of the test,
 // restoring the original value (or absence) on cleanup. t.Setenv cannot be
-// used to truly unset a variable.
+// used to truly unset a variable
 func unsetenv(t *testing.T, key string) {
 	t.Helper()
 	orig, hadOrig := os.LookupEnv(key)
@@ -157,7 +157,7 @@ func TestChooseEditor(t *testing.T) {
 	t.Run("returns error when nothing is available", func(t *testing.T) {
 		unsetenv(t, "EDITOR")
 		unsetenv(t, "VISUAL")
-		// Empty PATH means LookPath cannot resolve "nano".
+		// empty PATH means LookPath cannot resolve "nano"
 		t.Setenv("PATH", "")
 
 		got, err := chooseEditor()

@@ -25,25 +25,47 @@ type DayLog struct {
 	Date *time.Time
 }
 
-func New(args []string, project string) (*DayLog, error) {
+func projectPathAt(base, project string) (string, error) {
+	return filepath.Abs(filepath.Join(base, "daylog", project))
+}
+
+func ensureProjectPathAt(base, project string) (string, error) {
+	p, err := projectPathAt(base, project)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(p, 0755); err != nil {
+		return "", err
+	}
+	return p, nil
+}
+
+func ProjectPath(project string) (string, error) {
+	return projectPathAt(xdg.DataHome, project)
+}
+
+func EnsureProjectPath(project string) (string, error) {
+	return ensureProjectPathAt(xdg.DataHome, project)
+}
+
+// new performs no filesystem i/o; date subdirs are created lazily by the methods that need them
+func New(args []string, projectPath string) (*DayLog, error) {
 	t, err := parseDateFromArgs(args)
 	if err != nil {
 		return nil, err
 	}
 
-	projectPath, err := projectPath(project)
-	if err != nil {
-		return nil, err
-	}
-
 	year, month, day := t.Year(), int(t.Month()), t.Day()
-	file, err := logPath(projectPath, year, month, day)
-	if err != nil {
-		return nil, err
-	}
+	logFile := filepath.Join(
+		projectPath,
+		strconv.Itoa(year),
+		fmt.Sprintf("%02d", month),
+		fmt.Sprintf("%02d", day),
+		"log.md",
+	)
 
 	return &DayLog{
-		Path:        file,
+		Path:        logFile,
 		ProjectPath: projectPath,
 		Date:        t,
 	}, nil
@@ -100,55 +122,6 @@ func (d *DayLog) Show(format string) (string, error) {
 	return contents, nil
 }
 
-// returns the complete path to log file
-func logPath(path string, year, month, day int) (string, error) {
-	path, err := createDir(
-		path,
-		filepath.Join(
-			strconv.Itoa(year),
-			fmt.Sprintf("%02d", month),
-			fmt.Sprintf("%02d", day),
-		),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return filepath.Join(path, "log.md"), nil
-}
-
-func projectPath(project string) (string, error) {
-	path, err := createDir(
-		xdg.DataHome,
-		filepath.Join(
-			"daylog",
-			project,
-		),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return path, nil
-}
-
-// resolves root path, and creates directories specified in path
-func createDir(rootPath, path string) (string, error) {
-	absolutePath, err := filepath.Abs(rootPath)
-	if err != nil {
-		return "", err
-	}
-
-	completePath := filepath.Join(absolutePath, path)
-
-	err = os.MkdirAll(completePath, os.ModePerm)
-	if err != nil {
-		return "", err
-	}
-
-	return completePath, nil
-}
-
 func parseDateFromArgs(args []string) (*time.Time, error) {
 	tz, _ := time.LoadLocation("Local")
 	cfg := &dateparser.Configuration{
@@ -174,21 +147,23 @@ func createIfMissing(d *DayLog) error {
 		return nil
 	}
 
-	var file *os.File
-	if os.IsNotExist(err) {
-		file, err = os.Create(d.Path)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-	} else {
+	if !os.IsNotExist(err) {
 		return err
 	}
 
+	if err := os.MkdirAll(filepath.Dir(d.Path), 0755); err != nil {
+		return err
+	}
+
+	file, err := os.Create(d.Path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
 	year, month, day := d.Date.Year(), int(d.Date.Month()), d.Date.Day()
 	header := fmt.Sprintf("# %d/%02d/%02d\n\n", year, month, day)
-	_, err = file.WriteString(header)
-	if err != nil {
+	if _, err := file.WriteString(header); err != nil {
 		return err
 	}
 
