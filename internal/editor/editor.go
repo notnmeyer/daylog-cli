@@ -7,12 +7,12 @@ import (
 )
 
 func chooseEditor() (string, error) {
-	if _, exists := os.LookupEnv("EDITOR"); exists {
-		return os.Getenv("EDITOR"), nil
+	if v := os.Getenv("EDITOR"); v != "" {
+		return v, nil
 	}
 
-	if _, exists := os.LookupEnv("VISUAL"); exists {
-		return os.Getenv("VISUAL"), nil
+	if v := os.Getenv("VISUAL"); v != "" {
+		return v, nil
 	}
 
 	if _, err := exec.LookPath("nano"); err == nil {

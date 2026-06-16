@@ -23,12 +23,14 @@ func Format(format, content string) (string, error) {
 
 	switch format {
 	case "markdown", "md":
-		renderer, _ := glamour.NewTermRenderer(
+		renderer, err := glamour.NewTermRenderer(
 			glamour.WithAutoStyle(),
 			glamour.WithWordWrap(0),
 		)
+		if err != nil {
+			return "", err
+		}
 
-		var err error
 		content, err = renderer.Render(content)
 		if err != nil {
 			return "", err

@@ -140,6 +140,34 @@ func TestChooseEditor(t *testing.T) {
 		}
 	})
 
+	t.Run("empty EDITOR falls through to VISUAL", func(t *testing.T) {
+		t.Setenv("EDITOR", "")
+		t.Setenv("VISUAL", "vim")
+		withPath(t, withFakeNano(t))
+
+		got, err := chooseEditor()
+		if err != nil {
+			t.Fatalf("chooseEditor() err = %v, want nil", err)
+		}
+		if got != "vim" {
+			t.Errorf("chooseEditor() = %q, want %q (empty EDITOR should fall through)", got, "vim")
+		}
+	})
+
+	t.Run("empty EDITOR and VISUAL falls through to nano", func(t *testing.T) {
+		t.Setenv("EDITOR", "")
+		t.Setenv("VISUAL", "")
+		withPath(t, withFakeNano(t))
+
+		got, err := chooseEditor()
+		if err != nil {
+			t.Fatalf("chooseEditor() err = %v, want nil", err)
+		}
+		if got != "nano" {
+			t.Errorf("chooseEditor() = %q, want %q", got, "nano")
+		}
+	})
+
 	t.Run("falls back to nano when found on PATH", func(t *testing.T) {
 		unsetenv(t, "EDITOR")
 		unsetenv(t, "VISUAL")
