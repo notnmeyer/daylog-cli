@@ -30,12 +30,12 @@ var showCmd = &cobra.Command{
 
 		format, err := cmd.PersistentFlags().GetString("output")
 		if err != nil {
-			log.Fatalf("%s", err.Error())
+			log.Fatal(err)
 		}
 
 		showPrevious, err := cmd.Root().PersistentFlags().GetBool("prev")
 		if err != nil {
-			log.Fatalf("%s", err.Error())
+			log.Fatal(err)
 		}
 
 		if showPrevious {
@@ -46,7 +46,7 @@ var showCmd = &cobra.Command{
 
 		logContents, err := dl.Show(format)
 		if err != nil {
-			log.Fatalf("%s", err.Error())
+			log.Fatal(err)
 		}
 
 		fmt.Println(string(logContents))

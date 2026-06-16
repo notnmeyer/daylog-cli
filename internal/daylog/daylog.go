@@ -115,7 +115,7 @@ func (d *DayLog) Show(format string) (string, error) {
 		return "", err
 	}
 
-	contents, err = outputFormatter.Format(format, contents)
+	contents, err = outputformatter.Format(format, contents)
 	if err != nil {
 		return "", err
 	}

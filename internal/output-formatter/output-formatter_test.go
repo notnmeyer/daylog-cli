@@ -1,4 +1,4 @@
-package outputFormatter
+package outputformatter
 
 import (
 	"strings"

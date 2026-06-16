@@ -27,18 +27,11 @@ var copyCmd = &cobra.Command{
 
 		logContents, err := dl.Show("text")
 		if err != nil {
-			log.Fatalf("%s", err.Error())
+			log.Fatal(err)
 		}
 
-		// only going to worry about mac for now. this is hard to test on headless linux. help wanted.
-		if runtime.GOOS != "darwin" {
-			msg := fmt.Sprintf("copy not supported on %s\n", runtime.GOOS)
-			log.Fatal(msg)
-		}
-
-		err = copy([]byte(logContents))
-		if err != nil {
-			log.Fatalf("Failed to copy to clipboard: %v", err)
+		if err := copy([]byte(logContents)); err != nil {
+			log.Fatal(err)
 		}
 
 		fmt.Println("Copied to clipboard.")
@@ -50,14 +43,13 @@ func init() {
 }
 
 func copy(content []byte) error {
-	var err error = nil
-
 	switch runtime.GOOS {
 	case "darwin":
-		err = pbcopy(content)
+		return pbcopy(content)
+	default:
+		// only mac for now. help wanted for other platforms.
+		return fmt.Errorf("copy not supported on %s", runtime.GOOS)
 	}
-
-	return err
 }
 
 func pbcopy(content []byte) error {
