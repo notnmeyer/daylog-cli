@@ -49,7 +49,7 @@ func Open(logFile string) error {
 func Read(logFile string) (string, error) {
 	contents, err := os.ReadFile(logFile)
 	if err != nil {
-		return "", nil
+		return "", err
 	}
 
 	return string(contents), nil
