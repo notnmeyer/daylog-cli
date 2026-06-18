@@ -134,9 +134,8 @@ func (d *DayLog) UsePrevious(now time.Time) error {
 }
 
 func parseDateFromArgs(args []string) (*time.Time, error) {
-	tz, _ := time.LoadLocation("Local")
 	cfg := &dateparser.Configuration{
-		DefaultTimezone: tz,
+		DefaultTimezone: time.Local,
 	}
 
 	if len(args) > 0 {
