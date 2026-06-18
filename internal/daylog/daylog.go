@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
-	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
@@ -50,12 +49,7 @@ func EnsureProjectPath(project string) (string, error) {
 }
 
 // new performs no filesystem i/o; date subdirs are created lazily by the methods that need them
-func New(args []string, projectPath string) (*DayLog, error) {
-	t, err := parseDateFromArgs(args)
-	if err != nil {
-		return nil, err
-	}
-
+func New(t time.Time, projectPath string) (*DayLog, error) {
 	year, month, day := t.Year(), int(t.Month()), t.Day()
 	logFile := filepath.Join(
 		projectPath,
@@ -68,7 +62,7 @@ func New(args []string, projectPath string) (*DayLog, error) {
 	return &DayLog{
 		Path:        logFile,
 		ProjectPath: projectPath,
-		Date:        t,
+		Date:        &t,
 	}, nil
 }
 
@@ -123,7 +117,7 @@ func (d *DayLog) Show(format string) (string, error) {
 	return contents, nil
 }
 
-// UsePrevious mutates d.Path to point at the most recent log before now.
+// usePrevious mutates d.Path to point at the most recent log before now.
 func (d *DayLog) UsePrevious(now time.Time) error {
 	prev, err := file.PreviousLog(d.ProjectPath, file.LogProvider{}, now)
 	if err != nil {
@@ -131,24 +125,6 @@ func (d *DayLog) UsePrevious(now time.Time) error {
 	}
 	d.Path = filepath.Join(d.ProjectPath, prev, "log.md")
 	return nil
-}
-
-func parseDateFromArgs(args []string) (*time.Time, error) {
-	cfg := &dateparser.Configuration{
-		DefaultTimezone: time.Local,
-	}
-
-	if len(args) > 0 {
-		dateString := strings.Join(args, " ")
-		d, err := dateparser.Parse(cfg, dateString)
-		if err != nil {
-			return nil, err
-		}
-		return &d.Time, nil
-	} else {
-		t := time.Now()
-		return &t, nil
-	}
 }
 
 func createIfMissing(d *DayLog) error {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/fang"
+	"github.com/markusmobius/go-dateparser"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -79,7 +80,12 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 			log.Fatal(err)
 		}
 
-		dl, err := daylog.New(args, projectPath)
+		date, err := parseDateFromArgs(args)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dl, err := daylog.New(date, projectPath)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -101,10 +107,23 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 	}
 }
 
+func parseDateFromArgs(args []string) (time.Time, error) {
+	cfg := &dateparser.Configuration{
+		DefaultTimezone: time.Local,
+	}
+
+	if len(args) == 0 {
+		return time.Now(), nil
+	}
+
+	d, err := dateparser.Parse(cfg, strings.Join(args, " "))
+	if err != nil {
+		return time.Time{}, err
+	}
+	return d.Time, nil
+}
+
 func formatStdinContent(content string) string {
-	// if a string like "hello\nworld" is piped, the markdown formatter (the default) will smash
-	// it together like "helloworld". so if there are \n's just make it a code block so the line
-	// breaks render correctly.
 	content = strings.TrimRight(content, "\n")
 	if strings.Contains(content, "\n") {
 		return "```\n" + content + "\n```"

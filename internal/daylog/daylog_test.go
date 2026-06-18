@@ -173,13 +173,13 @@ func TestEnsureProjectPathAt(t *testing.T) {
 // regression: --prev previously created today's tree as a side effect
 func TestNew_DoesNotCreateDateSubdir(t *testing.T) {
 	base := t.TempDir()
+	today := time.Now()
 
-	dl, err := New(nil, base)
+	dl, err := New(today, base)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
 
-	today := time.Now()
 	yearDir := filepath.Join(base, strconv.Itoa(today.Year()))
 	if _, err := os.Stat(yearDir); !os.IsNotExist(err) {
 		t.Errorf("New() created date subdir %q; should be lazy", yearDir)
@@ -237,7 +237,7 @@ func TestUsePrevious(t *testing.T) {
 		if err := dl.UsePrevious(now); err == nil {
 			t.Errorf("UsePrevious() err = nil, want non-nil")
 		}
-		// Path should not have been mutated on error.
+		// path should not have been mutated on error.
 		want := filepath.Join(project, "2025/12/02/log.md")
 		if dl.Path != want {
 			t.Errorf("dl.Path = %q, want unchanged %q", dl.Path, want)
