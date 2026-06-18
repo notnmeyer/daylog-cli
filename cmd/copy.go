@@ -35,40 +35,48 @@ func init() {
 func copy(content []byte) error {
 	switch runtime.GOOS {
 	case "darwin":
-		return pbcopy(content)
+		return pipeTo(content, "pbcopy")
+	case "linux":
+		return linuxCopy(content)
+	case "windows":
+		return pipeTo(content, "powershell", "-command", "Set-Clipboard")
 	default:
-		// only mac for now. help wanted for other platforms.
 		return fmt.Errorf("copy not supported on %s", runtime.GOOS)
 	}
 }
 
-func pbcopy(content []byte) error {
-	cmd := exec.Command("pbcopy")
+func linuxCopy(content []byte) error {
+	if _, err := exec.LookPath("wl-copy"); err == nil {
+		return pipeTo(content, "wl-copy")
+	}
+	if _, err := exec.LookPath("xclip"); err == nil {
+		return pipeTo(content, "xclip", "-selection", "clipboard")
+	}
+	if _, err := exec.LookPath("xsel"); err == nil {
+		return pipeTo(content, "xsel", "-ib")
+	}
+	return fmt.Errorf("copy not supported on linux: install wl-clipboard, xclip, or xsel")
+}
+
+func pipeTo(content []byte, name string, args ...string) error {
+	cmd := exec.Command(name, args...)
 
 	in, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
 
-	err = cmd.Start()
-	if err != nil {
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
-	_, err = in.Write(content)
-	if err != nil {
+	if _, err := in.Write(content); err != nil {
 		return err
 	}
 
-	err = in.Close()
-	if err != nil {
+	if err := in.Close(); err != nil {
 		return err
 	}
 
-	err = cmd.Wait()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return cmd.Wait()
 }
