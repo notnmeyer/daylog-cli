@@ -154,6 +154,20 @@ func TestChooseEditor(t *testing.T) {
 		}
 	})
 
+	t.Run("VISUAL wins when both set", func(t *testing.T) {
+		t.Setenv("VISUAL", "vim")
+		t.Setenv("EDITOR", "emacs")
+		withPath(t, withFakeNano(t))
+
+		got, err := chooseEditor()
+		if err != nil {
+			t.Fatalf("chooseEditor() err = %v, want nil", err)
+		}
+		if got != "vim" {
+			t.Errorf("chooseEditor() = %q, want %q (VISUAL should take precedence over EDITOR)", got, "vim")
+		}
+	})
+
 	t.Run("empty EDITOR and VISUAL falls through to nano", func(t *testing.T) {
 		t.Setenv("EDITOR", "")
 		t.Setenv("VISUAL", "")

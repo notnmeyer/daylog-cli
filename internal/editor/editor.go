@@ -7,11 +7,11 @@ import (
 )
 
 func chooseEditor() (string, error) {
-	if v := os.Getenv("EDITOR"); v != "" {
+	if v := os.Getenv("VISUAL"); v != "" {
 		return v, nil
 	}
 
-	if v := os.Getenv("VISUAL"); v != "" {
+	if v := os.Getenv("EDITOR"); v != "" {
 		return v, nil
 	}
 
