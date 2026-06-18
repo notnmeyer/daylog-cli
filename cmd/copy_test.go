@@ -7,8 +7,8 @@ import (
 )
 
 func TestCopy_UnsupportedOS(t *testing.T) {
-	if runtime.GOOS == "darwin" {
-		t.Skip("test only exercises the non-darwin branch")
+	if runtime.GOOS == "darwin" || runtime.GOOS == "linux" || runtime.GOOS == "windows" {
+		t.Skip("test only exercises the default/unhandled OS branch")
 	}
 
 	err := copy([]byte("hello"))
