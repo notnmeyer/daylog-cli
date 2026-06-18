@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -60,23 +61,6 @@ func linuxCopy(content []byte) error {
 
 func pipeTo(content []byte, name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-
-	in, err := cmd.StdinPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	if _, err := in.Write(content); err != nil {
-		return err
-	}
-
-	if err := in.Close(); err != nil {
-		return err
-	}
-
-	return cmd.Wait()
+	cmd.Stdin = bytes.NewReader(content)
+	return cmd.Run()
 }
