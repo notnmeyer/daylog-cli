@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 
@@ -24,7 +25,7 @@ var copyCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println("Copied to clipboard.")
+		fmt.Fprintln(os.Stderr, "Copied to clipboard.")
 		return nil
 	}),
 }
