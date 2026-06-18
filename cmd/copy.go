@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os/exec"
 	"runtime"
 
@@ -14,28 +13,19 @@ var copyCmd = &cobra.Command{
 	Use:   "copy",
 	Short: "Copy the specified log to the clipboard",
 	Long:  "Copy the specified log to the clipboard",
-	Run: func(cmd *cobra.Command, args []string) {
-		projectPath, err := daylog.EnsureProjectPath(config.Project)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		dl, err := daylog.New(args, projectPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
+	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		logContents, err := dl.Show("text")
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		if err := copy([]byte(logContents)); err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		fmt.Println("Copied to clipboard.")
-	},
+		return nil
+	}),
 }
 
 func init() {

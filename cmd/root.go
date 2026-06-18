@@ -27,42 +27,22 @@ var rootCmd = &cobra.Command{
 	Short: "A tool for keeping track of what you did today",
 	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
 
-	Run: func(cmd *cobra.Command, args []string) {
-		projectPath, err := daylog.EnsureProjectPath(config.Project)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		dl, err := daylog.New(args, projectPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if err := applyPrevFlag(cmd, dl); err != nil {
-			log.Fatal(err)
-		}
-
+	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		piped, err := stdinIsPiped()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		if piped {
 			content, err := io.ReadAll(os.Stdin)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
-			formatted := formatStdinContent(string(content))
-			if err := dl.Append(formatted); err != nil {
-				log.Fatal(err)
-			}
-			return
+			return dl.Append(formatStdinContent(string(content)))
 		}
 
-		if err := dl.Edit(); err != nil {
-			log.Fatal(err)
-		}
-	},
+		return dl.Edit()
+	}),
 }
 
 // entrypoint
@@ -86,15 +66,33 @@ func init() {
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
 }
 
-func applyPrevFlag(cmd *cobra.Command, dl *daylog.DayLog) error {
-	showPrevious, err := cmd.PersistentFlags().GetBool("prev")
-	if err != nil {
-		return err
+func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *cobra.Command, args []string) {
+	return func(cmd *cobra.Command, args []string) {
+		projectPath, err := daylog.EnsureProjectPath(config.Project)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		dl, err := daylog.New(args, projectPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		showPrevious, err := cmd.Root().PersistentFlags().GetBool("prev")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if showPrevious {
+			if err := dl.UsePrevious(time.Now()); err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		if err := fn(cmd, dl); err != nil {
+			log.Fatal(err)
+		}
 	}
-	if showPrevious {
-		return dl.UsePrevious(time.Now())
-	}
-	return nil
 }
 
 func formatStdinContent(content string) string {

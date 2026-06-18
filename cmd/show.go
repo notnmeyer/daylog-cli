@@ -2,55 +2,29 @@ package cmd
 
 import (
 	"fmt"
-	"log"
-	"time"
 
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
 
-type ShowConfig struct {
-	Output string
-}
-
 var showCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Display today's log",
 	Long:  "Display today's log",
-	Run: func(cmd *cobra.Command, args []string) {
-		projectPath, err := daylog.EnsureProjectPath(config.Project)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		dl, err := daylog.New(args, projectPath)
-		if err != nil {
-			log.Fatal(err)
-		}
-
+	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		format, err := cmd.PersistentFlags().GetString("output")
 		if err != nil {
-			log.Fatal(err)
-		}
-
-		showPrevious, err := cmd.Root().PersistentFlags().GetBool("prev")
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		if showPrevious {
-			if err := dl.UsePrevious(time.Now()); err != nil {
-				log.Fatal(err)
-			}
+			return err
 		}
 
 		logContents, err := dl.Show(format)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		fmt.Println(string(logContents))
-	},
+		return nil
+	}),
 }
 
 func init() {
