@@ -15,6 +15,13 @@ var copyCmd = &cobra.Command{
 	Use:   "copy",
 	Short: "Copy the specified log to the clipboard",
 	Long:  "Copy the specified log to the clipboard",
+	Example: `
+		daylog copy
+		daylog copy -- yesterday
+		daylog copy --prev
+		daylog copy -p work -- 2023/01/07
+    `,
+
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		logContents, err := dl.Show("text")
 		if err != nil {

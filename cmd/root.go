@@ -26,6 +26,12 @@ var rootCmd = &cobra.Command{
 	Use:   "daylog",
 	Short: "A tool for keeping track of what you did today",
 	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
+	Example: `
+		daylog
+		daylog -- yesterday
+		echo "note" | daylog
+		daylog -p work -- 2023/01/07
+	`,
 
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		piped, err := stdinIsPiped()
