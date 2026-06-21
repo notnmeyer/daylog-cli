@@ -26,6 +26,8 @@ To view today's log, run `daylog show`.
 
 To interact with a past or future log supply a date (`daylog show -- 2023/01/07`), or a more casual realtive reference, "tomorrow", "yesterday", "1 day ago", etc.
 
+You can append a quick one-line entry without opening an editor with `-m`, `daylog -m "ate a burrito"` (this appends `- ate a burrito` to today's log). It accepts the usual date references too, `daylog -m "ate a burrito" -- yesterday`.
+
 You can pipe updates as well, `echo "- ate a burrito" | daylog`.
 
 For other commands and options see, `daylog --help`.

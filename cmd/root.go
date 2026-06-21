@@ -16,6 +16,7 @@ import (
 
 type Config struct {
 	Project string
+	Message string
 }
 
 var (
@@ -35,6 +36,10 @@ var rootCmd = &cobra.Command{
 	`,
 
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
+		if config.Message != "" {
+			return dl.Append(formatMessage(config.Message))
+		}
+
 		piped, err := stdinIsPiped()
 		if err != nil {
 			return err
@@ -71,6 +76,16 @@ func init() {
 	// global flags
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
+
+	rootCmd.Flags().StringVarP(&config.Message, "message", "m", "", "Append a one-line entry to the log instead of opening an editor")
+}
+
+func formatMessage(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if strings.HasPrefix(msg, "- ") {
+		return msg
+	}
+	return "- " + msg
 }
 
 func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *cobra.Command, args []string) {
