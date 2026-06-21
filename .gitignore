@@ -24,5 +24,4 @@ go.work
 dist/
 
 .env
-.direnv
 .DS_Store
