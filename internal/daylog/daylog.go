@@ -167,7 +167,7 @@ func createIfMissing(d *DayLog) error {
 	return nil
 }
 
-// carryOverTodos reads the log before `before` and returns any lines containing "TODO".
+// carryOverTodos reads the log before `before` and returns any lines starting with "- TODO:".
 func carryOverTodos(projectPath string, before time.Time) []string {
 	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), before)
 	if err != nil {
@@ -182,7 +182,7 @@ func carryOverTodos(projectPath string, before time.Time) []string {
 
 	var todos []string
 	for _, line := range strings.Split(string(content), "\n") {
-		if strings.Contains(line, "TODO") {
+		if strings.HasPrefix(line, "- TODO:") {
 			todos = append(todos, line)
 		}
 	}

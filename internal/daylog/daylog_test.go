@@ -120,6 +120,11 @@ func TestCarryOverTodos(t *testing.T) {
 			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- TODO: fix bug\n",
 		},
 		{
+			name:         "only lines starting with - TODO: are copied",
+			prevContent:  "# 2025/12/01\n\n- TODO: write tests\nthinking about TODOs\n  - TODO: indented note\n- did a TODO\n",
+			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n",
+		},
+		{
 			name:         "no previous log",
 			prevContent:  "",
 			expectedFile: "# 2025/12/02\n\n",
