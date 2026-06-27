@@ -16,7 +16,7 @@ import (
 
 type Config struct {
 	Project string
-	Message string
+	Append  string
 }
 
 var (
@@ -31,13 +31,15 @@ var rootCmd = &cobra.Command{
 	Example: `
 		daylog
 		daylog -- yesterday
+		daylog -a "ate a burrito"
+		daylog -a "ate a burrito" -- yesterday
 		echo "note" | daylog
 		daylog -p work -- 2023/01/07
 	`,
 
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
-		if config.Message != "" {
-			return dl.Append(formatMessage(config.Message))
+		if config.Append != "" {
+			return dl.Append(formatMessage(config.Append))
 		}
 
 		piped, err := stdinIsPiped()
@@ -77,7 +79,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&config.Project, "project", "p", "default", "The daylog project to use")
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
 
-	rootCmd.Flags().StringVarP(&config.Message, "message", "m", "", "Append a one-line entry to the log instead of opening an editor")
+	rootCmd.Flags().StringVarP(&config.Append, "append", "a", "", "Append a one-line entry to the log instead of opening an editor")
 }
 
 func formatMessage(msg string) string {
