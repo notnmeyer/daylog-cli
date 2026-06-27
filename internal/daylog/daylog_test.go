@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+// writePrevLog creates a log file for the given date under projectPath.
+func writePrevLog(t *testing.T, projectPath, dateDir, content string) {
+	t.Helper()
+	dir := filepath.Join(projectPath, dateDir)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatalf("creating prev log dir: %v", err)
+	}
+	path := filepath.Join(dir, "log.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("writing prev log: %v", err)
+	}
+}
+
 func testDayLog(t *testing.T) *DayLog {
 	t.Helper()
 	dir := t.TempDir()
@@ -85,6 +98,54 @@ func TestAppend(t *testing.T) {
 			got := readFile(t, dl.Path)
 			if got != tt.expectedFinal {
 				t.Errorf("file contents =\n%q\nwant\n%q", got, tt.expectedFinal)
+			}
+		})
+	}
+}
+
+func TestCarryOverTodos(t *testing.T) {
+	tests := []struct {
+		name         string
+		prevContent  string
+		expectedFile string
+	}{
+		{
+			name:         "no todos in previous log",
+			prevContent:  "# 2025/12/01\n\ndid some work\n",
+			expectedFile: "# 2025/12/02\n\n",
+		},
+		{
+			name:         "todos are copied to new log",
+			prevContent:  "# 2025/12/01\n\n- TODO: write tests\n- TODO: fix bug\n- done thing\n",
+			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- TODO: fix bug\n",
+		},
+		{
+			name:         "only lines starting with - TODO: are copied",
+			prevContent:  "# 2025/12/01\n\n- TODO: write tests\nthinking about TODOs\n  - TODO: indented note\n- did a TODO\n",
+			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n",
+		},
+		{
+			name:         "no previous log",
+			prevContent:  "",
+			expectedFile: "# 2025/12/02\n\n",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dl := testDayLog(t)
+
+			if tt.prevContent != "" {
+				writePrevLog(t, dl.ProjectPath, "2025/12/01", tt.prevContent)
+			}
+
+			if err := createIfMissing(dl); err != nil {
+				t.Fatalf("createIfMissing() error = %v", err)
+			}
+
+			got := readFile(t, dl.Path)
+			if got != tt.expectedFile {
+				t.Errorf("file contents =\n%q\nwant\n%q", got, tt.expectedFile)
 			}
 		})
 	}
