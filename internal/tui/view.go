@@ -136,7 +136,7 @@ func (m Model) headerView() string {
 	if day, ok := m.selectedDay(); ok {
 		primary, secondary := dayLabel(day, m.today)
 		if t, err := time.Parse(dayFormat, day); err == nil {
-			primary = t.Format("Mon") + " " + primary
+			primary = t.Format("Mon Jan 02 2006")
 		}
 		header += " · " + primary
 		// only show the relative hint (today/yesterday/N days ago); for
