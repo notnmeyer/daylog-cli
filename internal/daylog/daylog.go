@@ -167,6 +167,45 @@ func createIfMissing(d *DayLog) error {
 	return nil
 }
 
+type SearchMatch struct {
+	// the date of the log containing the match, as YYYY/MM/DD
+	Date string
+
+	// the line that matched
+	Line string
+}
+
+// search every log in the project for lines containing query, most recent log first
+func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
+	logs, err := file.NewLogProvider().GetLogs(projectPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if ignoreCase {
+		query = strings.ToLower(query)
+	}
+
+	var matches []SearchMatch
+	for _, log := range logs {
+		content, err := os.ReadFile(filepath.Join(projectPath, log, "log.md"))
+		if err != nil {
+			return nil, err
+		}
+
+		for _, line := range strings.Split(string(content), "\n") {
+			haystack := line
+			if ignoreCase {
+				haystack = strings.ToLower(line)
+			}
+			if strings.Contains(haystack, query) {
+				matches = append(matches, SearchMatch{Date: log, Line: line})
+			}
+		}
+	}
+	return matches, nil
+}
+
 // carryOverTodos reads the log before `before` and returns any lines starting with "- TODO:".
 func carryOverTodos(projectPath string, before time.Time) []string {
 	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), before)
