@@ -27,7 +27,9 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "daylog",
 	Short: "A tool for keeping track of what you did today",
-	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
+	Long: "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow.\n\n" +
+		"Dates accept today/yesterday/tomorrow, a weekday name (its most recent occurrence), " +
+		"relative offsets like \"3 days ago\" or \"in 2 weeks\", and calendar dates like 2023/01/07 or \"Jan 7\".",
 	Example: `
 		daylog
 		daylog -- yesterday
