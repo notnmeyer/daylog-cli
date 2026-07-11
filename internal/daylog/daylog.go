@@ -41,6 +41,26 @@ func ensureProjectPathAt(base, project string) (string, error) {
 	return p, nil
 }
 
+func listProjectsAt(base string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(base, "daylog"))
+	if err != nil {
+		return nil, err
+	}
+
+	var projects []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			projects = append(projects, entry.Name())
+		}
+	}
+	return projects, nil
+}
+
+// ListProjects returns the names of all existing projects, sorted
+func ListProjects() ([]string, error) {
+	return listProjectsAt(xdg.DataHome)
+}
+
 func ProjectPath(project string) (string, error) {
 	return projectPathAt(xdg.DataHome, project)
 }

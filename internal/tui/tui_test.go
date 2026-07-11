@@ -384,6 +384,90 @@ func TestCopiedStatusSetsAndClears(t *testing.T) {
 	}
 }
 
+func TestProjectSwitcherFlow(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	oldPath := t.TempDir()
+	seedLog(t, oldPath, "2026/07/09", "- old project entry\n")
+
+	m := newTestModel(t, oldPath, today)
+
+	// p opens the picker
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	m = mm.(Model)
+	if m.mode != modeProjects {
+		t.Fatal("expected projects mode after p")
+	}
+	if cmd == nil {
+		t.Fatal("expected loadProjects cmd")
+	}
+
+	// simulate the load; current project should be pre-selected
+	mm, _ = m.Update(projectsLoadedMsg{projects: []string{"default", "work"}})
+	m = mm.(Model)
+	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "default" {
+		t.Errorf("expected current project pre-selected, got %q", item)
+	}
+
+	// navigate to "work"; simulate the switch completing
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	m = mm.(Model)
+	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "work" {
+		t.Fatalf("expected work selected, got %q", item)
+	}
+
+	newPath := t.TempDir()
+	seedLog(t, newPath, "2026/07/05", "- work project entry\n")
+	mm, cmd = m.Update(projectSwitchedMsg{name: "work", path: newPath})
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Error("expected browse mode after switch")
+	}
+	if m.project != "work" || m.projectPath != newPath {
+		t.Errorf("expected project swapped, got %s %s", m.project, m.projectPath)
+	}
+
+	// the reload should list the new project's days with today selected
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	loaded, ok := msgs[0].(daysLoadedMsg)
+	if !ok {
+		t.Fatalf("expected daysLoadedMsg, got %T", msgs[0])
+	}
+	if !slices.Equal(loaded.days, []string{"2026/07/10", "2026/07/05"}) {
+		t.Errorf("expected new project days, got %v", loaded.days)
+	}
+
+	mm, _ = m.Update(loaded)
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected selection reset to today, got %s", day)
+	}
+}
+
+func TestPickerEscCancels(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	m = mm.(Model)
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Error("expected esc to close picker, not quit")
+	}
+	if cmd != nil {
+		t.Error("expected no cmd on cancel")
+	}
+	if m.project != "default" {
+		t.Errorf("expected project unchanged, got %s", m.project)
+	}
+}
+
 func readLog(t *testing.T, projectPath, day string) []byte {
 	t.Helper()
 

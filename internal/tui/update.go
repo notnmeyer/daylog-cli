@@ -34,6 +34,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, loadDays(m.projectPath, m.today)
 
+	case projectsLoadedMsg:
+		items := make([]list.Item, len(msg.projects))
+		selected := 0
+		for i, p := range msg.projects {
+			items[i] = pickerItem(p)
+			if p == m.project {
+				selected = i
+			}
+		}
+		m.picker.SetItems(items)
+		m.picker.Select(selected)
+		m.layout()
+		return m, nil
+
+	case projectSwitchedMsg:
+		m.project = msg.name
+		m.projectPath = msg.path
+		m.mode = modeBrowse
+		// drop the old project's selection so the reload lands on today
+		m.days.SetItems(nil)
+		return m, loadDays(m.projectPath, m.today)
+
 	case copiedMsg:
 		m.status = "Copied to clipboard."
 		return m, clearStatusAfter(2 * time.Second)
@@ -78,8 +100,11 @@ func (m Model) onDaysLoaded(msg daysLoadedMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.mode == modeInput {
+	switch m.mode {
+	case modeInput:
 		return m.onInputKey(msg)
+	case modeProjects:
+		return m.onPickerKey(msg)
 	}
 
 	switch {
@@ -104,6 +129,11 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, copyDay(m.projectPath, day)
+
+	case key.Matches(msg, m.keys.Projects):
+		m.mode = modeProjects
+		m.status = ""
+		return m, loadProjects()
 
 	case key.Matches(msg, m.keys.Tab):
 		if m.focus == focusDays {
@@ -140,6 +170,26 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.vp, cmd = m.vp.Update(msg)
+	return m, cmd
+}
+
+func (m Model) onPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		item, ok := m.picker.SelectedItem().(pickerItem)
+		if !ok {
+			m.mode = modeBrowse
+			return m, nil
+		}
+		return m, switchProject(string(item))
+
+	case tea.KeyEsc:
+		m.mode = modeBrowse
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.picker, cmd = m.picker.Update(msg)
 	return m, cmd
 }
 

@@ -22,6 +22,8 @@ type entryAppendedMsg struct{}
 type editorFinishedMsg struct{ err error }
 type copiedMsg struct{}
 type clearStatusMsg struct{}
+type projectsLoadedMsg struct{ projects []string }
+type projectSwitchedMsg struct{ name, path string }
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -119,6 +121,26 @@ func clearStatusAfter(d time.Duration) tea.Cmd {
 	return tea.Tick(d, func(time.Time) tea.Msg {
 		return clearStatusMsg{}
 	})
+}
+
+func loadProjects() tea.Cmd {
+	return func() tea.Msg {
+		projects, err := daylog.ListProjects()
+		if err != nil {
+			return errMsg{err}
+		}
+		return projectsLoadedMsg{projects: projects}
+	}
+}
+
+func switchProject(name string) tea.Cmd {
+	return func() tea.Msg {
+		path, err := daylog.EnsureProjectPath(name)
+		if err != nil {
+			return errMsg{err}
+		}
+		return projectSwitchedMsg{name: name, path: path}
+	}
 }
 
 func logPath(projectPath, day string) string {

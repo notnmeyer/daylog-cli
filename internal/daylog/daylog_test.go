@@ -424,3 +424,31 @@ func TestEditorCommand(t *testing.T) {
 		t.Errorf("expected header-only log, got %q", content)
 	}
 }
+
+func TestListProjectsAt(t *testing.T) {
+	base := t.TempDir()
+	for _, project := range []string{"default", "work"} {
+		if err := os.MkdirAll(filepath.Join(base, "daylog", project), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// stray files must be excluded
+	if err := os.WriteFile(filepath.Join(base, "daylog", "notes.txt"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	projects, err := listProjectsAt(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"default", "work"}
+	if len(projects) != len(want) {
+		t.Fatalf("expected %v, got %v", want, projects)
+	}
+	for i := range want {
+		if projects[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, projects)
+		}
+	}
+}

@@ -16,6 +16,7 @@ type mode int
 const (
 	modeBrowse mode = iota
 	modeInput
+	modeProjects
 )
 
 type focusArea int
@@ -37,6 +38,7 @@ type Model struct {
 	days        list.Model
 	vp          viewport.Model
 	input       textinput.Model
+	picker      list.Model
 	md          mdRenderer
 	keys        keyMap
 	help        help.Model
@@ -68,6 +70,15 @@ func New(projectPath, project string, today time.Time) Model {
 	input.Prompt = "append › "
 	input.Placeholder = "what did you do?"
 
+	// shared by the project switcher and (later) todo picker
+	picker := list.New(nil, pickerDelegate{styles: st}, 0, 0)
+	picker.SetShowTitle(false)
+	picker.SetShowStatusBar(false)
+	picker.SetShowHelp(false)
+	picker.SetShowPagination(false)
+	picker.SetFilteringEnabled(false)
+	picker.DisableQuitKeybindings()
+
 	return Model{
 		project:     project,
 		projectPath: projectPath,
@@ -77,6 +88,7 @@ func New(projectPath, project string, today time.Time) Model {
 		days:        l,
 		vp:          viewport.New(0, 0),
 		input:       input,
+		picker:      picker,
 		md:          newMDRenderer(),
 		keys:        defaultKeyMap(),
 		help:        help.New(),
@@ -110,6 +122,12 @@ func (m *Model) layout() {
 	m.vp.Height = bodyH
 
 	m.input.Width = m.width - len(m.input.Prompt) - 4
+
+	pickerH := min(10, bodyH-2, max(1, len(m.picker.Items())))
+	if pickerH < 1 {
+		pickerH = 1
+	}
+	m.picker.SetSize(min(40, m.width-8), pickerH)
 }
 
 func (m Model) selectedDay() (string, bool) {

@@ -75,6 +75,31 @@ func dayLabel(day string, today time.Time) (string, string) {
 	return primary, secondary
 }
 
+type pickerItem string
+
+func (p pickerItem) FilterValue() string { return string(p) }
+
+type pickerDelegate struct {
+	styles styles
+}
+
+func (pickerDelegate) Height() int                             { return 1 }
+func (pickerDelegate) Spacing() int                            { return 0 }
+func (pickerDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+
+func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	p, ok := item.(pickerItem)
+	if !ok {
+		return
+	}
+
+	if index == m.Index() {
+		fmt.Fprint(w, d.styles.selectedDay.Render("› "+string(p)))
+		return
+	}
+	fmt.Fprint(w, d.styles.normalDay.Render("  "+string(p)))
+}
+
 func (m Model) View() string {
 	if !m.ready {
 		return "loading…"
@@ -91,7 +116,22 @@ func (m Model) View() string {
 		vpStyle.Render(m.vp.View()),
 	)
 
+	if m.mode == modeProjects {
+		body = m.pickerView("switch project", lipgloss.Height(body))
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
+}
+
+// pickerView renders the picker as a centered modal in place of the body
+func (m Model) pickerView(title string, height int) string {
+	box := m.styles.focusedPane.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.styles.header.Render(title),
+		m.picker.View(),
+	))
+
+	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
 func (m Model) headerView() string {
@@ -101,6 +141,10 @@ func (m Model) headerView() string {
 func (m Model) footerView() string {
 	if m.mode == modeInput {
 		return m.styles.footer.UnsetFaint().Render(m.input.View())
+	}
+
+	if m.mode == modeProjects {
+		return m.styles.footer.Render("enter select • esc cancel")
 	}
 
 	if m.status != "" {
