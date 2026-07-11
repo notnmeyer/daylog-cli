@@ -280,6 +280,11 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 	for _, log := range logs {
 		content, err := os.ReadFile(filepath.Join(projectPath, log, "log.md"))
 		if err != nil {
+			// a log removed between listing and reading shouldn't sink the
+			// whole search; skip it and return what we can
+			if os.IsNotExist(err) {
+				continue
+			}
 			return nil, err
 		}
 
