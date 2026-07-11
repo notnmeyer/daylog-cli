@@ -78,7 +78,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for i, td := range msg.todos {
 			box := "[ ] "
 			if td.Done {
-				box = "[x] "
+				box = "[✓] "
 			}
 			items[i] = pickerItem{label: box + td.Text}
 		}
@@ -119,7 +119,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case copiedMsg:
-		m.status = "Copied to clipboard."
+		m.status = "copied to clipboard"
 		return m, clearStatusAfter(2 * time.Second)
 
 	case clearStatusMsg:

@@ -17,8 +17,8 @@ func defaultStyles() styles {
 	return styles{
 		header:     lipgloss.NewStyle().Bold(true).Padding(0, 1),
 		pane:       lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Padding(0, 1),
-		modal:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("62")).Padding(1, 2),
-		modalTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("62")).MarginBottom(1),
+		modal:      lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("170")).Padding(1, 2),
+		modalTitle: lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("170")).MarginBottom(1),
 		selected:   lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true),
 		normal:     lipgloss.NewStyle(),
 		footer:     lipgloss.NewStyle().Faint(true).Padding(0, 1),
@@ -28,4 +28,14 @@ func defaultStyles() styles {
 
 func lipglossHeight(s string) int {
 	return lipgloss.Height(s)
+}
+
+// fit clamps a full-width chrome line (header/footer) to the terminal
+// width so it stays a single row and never drags the layout wider than
+// the screen
+func (s styles) fit(style lipgloss.Style, w int) lipgloss.Style {
+	if w < 1 {
+		w = 1
+	}
+	return style.MaxWidth(w).MaxHeight(1)
 }

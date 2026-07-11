@@ -109,17 +109,26 @@ func (m Model) View() string {
 
 	switch m.mode {
 	case modeProjects:
-		body = m.pickerView("switch project", lipgloss.Height(body))
+		body = m.modalView("projects", "", "", lipgloss.Height(body))
 	case modeTodos:
 		day, _ := m.selectedDay()
-		body = m.pickerView("todos · "+day, lipgloss.Height(body))
+		body = m.modalView("todos · "+day, "", "", lipgloss.Height(body))
 	case modeDays:
-		body = m.dayPickerView(lipgloss.Height(body))
+		body = m.modalView("days", m.dayFilter.View(), "no matching days", lipgloss.Height(body))
 	case modeSearch:
-		body = m.searchView(lipgloss.Height(body))
+		body = m.modalView("search", m.searchInput.View(), m.searchEmpty(), lipgloss.Height(body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
+}
+
+// searchEmpty distinguishes the pre-search prompt from a query that
+// found nothing
+func (m Model) searchEmpty() string {
+	if strings.TrimSpace(m.searchInput.Value()) == "" {
+		return "type to search all logs"
+	}
+	return fmt.Sprintf("no matches for %q", strings.TrimSpace(m.searchInput.Value()))
 }
 
 func (m Model) headerView() string {
@@ -127,70 +136,57 @@ func (m Model) headerView() string {
 	if day, ok := m.selectedDay(); ok {
 		primary, secondary := dayLabel(day, m.today)
 		header += " · " + primary
-		if secondary != "" {
+		// only show the relative hint (today/yesterday/N days ago); for
+		// older days the secondary is just the raw date, which duplicates
+		// what the primary already conveys
+		if secondary != "" && secondary != day {
 			header += " · " + secondary
 		}
 	}
-	return m.styles.header.Render(header)
+	return m.styles.fit(m.styles.header, m.width).Render(header)
 }
 
-// pickerView renders the picker as a centered modal in place of the body
-func (m Model) pickerView(title string, height int) string {
-	box := m.styles.modal.Render(lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.styles.modalTitle.Render(title),
-		m.picker.View(),
-	))
+// modalView renders every picker as one centered modal in place of the
+// body: a title, an optional live-filter input, then the list. passing an
+// empty input omits the input row so static pickers hug their title.
+// empty is the lowercase placeholder shown in place of bubbles' default
+// "No items." when the list is empty
+func (m Model) modalView(title, input, empty string, height int) string {
+	rows := []string{m.styles.modalTitle.Render(title)}
+	if input != "" {
+		rows = append(rows, input, "")
+	}
+	if len(m.picker.Items()) == 0 && empty != "" {
+		rows = append(rows, m.styles.normal.Render("  "+empty))
+	} else {
+		rows = append(rows, m.picker.View())
+	}
 
-	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
-}
-
-// dayPickerView is the picker plus a live fuzzy-filter input
-func (m Model) dayPickerView(height int) string {
-	box := m.styles.modal.Render(lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.styles.modalTitle.Render("jump to day"),
-		m.dayFilter.View(),
-		"",
-		m.picker.View(),
-	))
-
-	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
-}
-
-// searchView is the picker plus a live search input; rows match the
-// CLI's `date: line` output
-func (m Model) searchView(height int) string {
-	box := m.styles.modal.Render(lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.styles.modalTitle.Render("search"),
-		m.searchInput.View(),
-		"",
-		m.picker.View(),
-	))
-
+	box := m.styles.modal.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
 func (m Model) footerView() string {
+	footer := m.styles.fit(m.styles.footer, m.width)
+
 	switch m.mode {
 	case modeInput:
-		return m.styles.footer.UnsetFaint().Render(m.input.View())
+		return footer.UnsetFaint().Render(m.input.View())
 	case modeProjects:
-		return m.styles.footer.Render("enter select • esc cancel")
+		return footer.Render("↑/↓ move • enter select • esc cancel")
 	case modeTodos:
-		return m.styles.footer.Render("space toggle • enter/esc close")
+		return footer.Render("space toggle • enter done • esc cancel")
 	case modeDays:
-		return m.styles.footer.Render("type to filter • ↑/↓ move • enter jump • esc cancel")
+		return footer.Render("type to filter • ↑/↓ move • enter select • esc cancel")
 	case modeSearch:
-		return m.styles.footer.Render("type to search • ↑/↓ move • enter open • esc cancel")
+		return footer.Render("type to search • ↑/↓ move • enter select • esc cancel")
 	}
 
 	if m.status != "" {
 		if strings.HasPrefix(m.status, "error:") {
-			return m.styles.errText.Render(m.status)
+			return m.styles.fit(m.styles.errText, m.width).Render(m.status)
 		}
-		return m.styles.footer.Render(m.status)
+		return footer.Render(m.status)
 	}
-	return m.styles.footer.Render(m.help.View(m.keys))
+	return footer.Render(m.help.View(m.keys))
 }

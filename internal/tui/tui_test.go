@@ -554,7 +554,7 @@ func TestCopiedStatusSetsAndClears(t *testing.T) {
 
 	mm, cmd := m.Update(copiedMsg{})
 	m = mm.(Model)
-	if m.status != "Copied to clipboard." {
+	if m.status != "copied to clipboard" {
 		t.Errorf("expected copied status, got %q", m.status)
 	}
 	if cmd == nil {
@@ -706,7 +706,7 @@ func TestTodoFlow(t *testing.T) {
 		mm, _ = m.Update(msg)
 		m = mm.(Model)
 	}
-	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "[x] TODO: buy tortillas" {
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "[✓] TODO: buy tortillas" {
 		t.Errorf("expected checked first item after reload, got %q", item.label)
 	}
 

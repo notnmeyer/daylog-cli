@@ -80,8 +80,10 @@ func defaultKeyMap() keyMap {
 	}
 }
 
+// ShortHelp leads with help and quit so the two most important discovery
+// hints survive when the footer truncates on a narrow terminal
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Todos, k.Help, k.Quit}
+	return []key.Binding{k.Help, k.Quit, k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Todos}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {

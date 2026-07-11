@@ -64,11 +64,11 @@ func New(projectPath, project string, today time.Time) Model {
 	input.Placeholder = "what did you do?"
 
 	dayFilter := textinput.New()
-	dayFilter.Prompt = " ⌕ "
+	dayFilter.Prompt = "filter › "
 	dayFilter.Placeholder = "type to filter"
 
 	searchInput := textinput.New()
-	searchInput.Prompt = " / "
+	searchInput.Prompt = "search › "
 	searchInput.Placeholder = "search all logs"
 
 	// shared by the day, project, and todo pickers
@@ -127,18 +127,15 @@ func (m *Model) layout() {
 
 	m.input.Width = m.width - len(m.input.Prompt) - 4
 
-	pickerW := min(60, m.width-12)
+	pickerW := max(1, min(60, m.width-12))
 	if m.mode == modeSearch {
 		// search rows carry whole log lines; give them more room
-		pickerW = min(90, m.width-12)
+		pickerW = max(1, min(90, m.width-12))
 	}
-	// leave room for the modal frame, title, input, and gaps
+	// every picker shrinks to fit its items, capped so a long list
+	// still leaves room for the modal frame, title, input, and gaps
 	pickerH := min(15, bodyH-8)
-	// the day and search pickers keep a stable height while typing;
-	// the project/todo pickers shrink to fit their items
-	if m.mode != modeDays && m.mode != modeSearch {
-		pickerH = min(pickerH, max(1, len(m.picker.Items())))
-	}
+	pickerH = min(pickerH, max(1, len(m.picker.Items())))
 	if pickerH < 1 {
 		pickerH = 1
 	}
