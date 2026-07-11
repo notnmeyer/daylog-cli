@@ -73,9 +73,11 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
 		),
+		// esc is "cancel modal" everywhere; binding it to quit too means a
+		// second esc after closing a modal would drop the whole session
 		Quit: key.NewBinding(
-			key.WithKeys("q", "esc", "ctrl+c"),
-			key.WithHelp("q/esc", "quit"),
+			key.WithKeys("q", "ctrl+c"),
+			key.WithHelp("q", "quit"),
 		),
 	}
 }
@@ -83,7 +85,7 @@ func defaultKeyMap() keyMap {
 // ShortHelp leads with help and quit so the two most important discovery
 // hints survive when the footer truncates on a narrow terminal
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit, k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Todos}
+	return []key.Binding{k.Help, k.Quit, k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Edit, k.Copy, k.Todos}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
