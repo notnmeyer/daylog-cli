@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -35,11 +36,13 @@ func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 		return
 	}
 
+	// the list only clamps height, so a long row (a full log line in
+	// search) would widen the modal past the screen; truncate to the width
 	if index == m.Index() {
-		fmt.Fprint(w, d.styles.selected.Render("› "+p.label))
+		fmt.Fprint(w, d.styles.selected.Render(ansi.Truncate("› "+p.label, m.Width(), "…")))
 		return
 	}
-	fmt.Fprint(w, d.styles.normal.Render("  "+p.label))
+	fmt.Fprint(w, d.styles.normal.Render(ansi.Truncate("  "+p.label, m.Width(), "…")))
 }
 
 // dayPickerItems builds picker items for days, fuzzy-filtered by query.
