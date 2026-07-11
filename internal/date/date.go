@@ -74,7 +74,14 @@ func Parse(input string, now time.Time) (time.Time, error) {
 			continue
 		}
 		if t.Year() == 0 {
-			t = time.Date(now.Year(), t.Month(), t.Day(), 0, 0, 0, 0, now.Location())
+			month, day := t.Month(), t.Day()
+			t = time.Date(now.Year(), month, day, 0, 0, 0, 0, now.Location())
+			// time.Date rolls impossible dates forward (Feb 29 in a
+			// non-leap year -> Mar 1); reject rather than pick a day the
+			// user didn't ask for
+			if t.Month() != month || t.Day() != day {
+				return time.Time{}, fmt.Errorf("%q isn't a valid date", input)
+			}
 		}
 		return t, nil
 	}
