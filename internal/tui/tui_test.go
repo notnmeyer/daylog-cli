@@ -8,7 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/notnmeyer/daylog-cli/internal/daylog"
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 func seedLog(t *testing.T, projectPath, day, content string) {
@@ -408,7 +412,6 @@ func TestQuitKeys(t *testing.T) {
 		key  tea.KeyMsg
 	}{
 		{name: "q", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}}},
-		{name: "esc", key: tea.KeyMsg{Type: tea.KeyEsc}},
 		{name: "ctrl+c", key: tea.KeyMsg{Type: tea.KeyCtrlC}},
 	}
 
@@ -424,6 +427,14 @@ func TestQuitKeys(t *testing.T) {
 				t.Error("expected tea.QuitMsg")
 			}
 		})
+	}
+
+	// esc cancels modals, so in browse it must not quit the session
+	m := newTestModel(t, t.TempDir(), today)
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc}); cmd != nil {
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Error("esc should not quit in browse mode")
+		}
 	}
 }
 
@@ -783,5 +794,120 @@ func TestDayLabel(t *testing.T) {
 				t.Errorf("expected secondary %q, got %q", tt.wantSecondary, secondary)
 			}
 		})
+	}
+}
+
+// a delayed todo load must not overwrite a picker the user has since
+// opened for another mode; without the mode guard its empty-value rows
+// leak into the projects picker and enter switches to the data root
+func TestTodosLoadDoesNotLeakIntoAnotherModal(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+
+	// enter todos mode (fires loadTodos), then leave and open projects
+	m.mode = modeProjects
+	mm, _ := m.Update(projectsLoadedMsg{projects: []string{"default", "work"}})
+	m = mm.(Model)
+
+	// the in-flight todo load resolves after the switch
+	mm, _ = m.Update(todosLoadedMsg{day: "2026/07/10", todos: []todo.Item{{Line: 1, Text: "TODO buy milk"}}})
+	m = mm.(Model)
+
+	if item, _ := m.picker.SelectedItem().(pickerItem); strings.Contains(item.label, "TODO") {
+		t.Errorf("todo row leaked into projects picker: %q", item.label)
+	}
+}
+
+// mirror guard for the project picker
+func TestProjectsLoadDoesNotLeakIntoAnotherModal(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	seedPath := t.TempDir()
+	seedLog(t, seedPath, "2026/07/10", "- [ ] TODO water plants\n")
+	m := newTestModel(t, seedPath, today)
+
+	// open todos, then a late projectsLoadedMsg arrives
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = mm.(Model)
+	for _, msg := range execCmd(t, cmd) {
+		mm, _ = m.Update(msg)
+		m = mm.(Model)
+	}
+	before := len(m.picker.Items())
+
+	mm, _ = m.Update(projectsLoadedMsg{projects: []string{"default", "work"}})
+	m = mm.(Model)
+
+	if len(m.picker.Items()) != before {
+		t.Errorf("projects leaked into todo picker: items went %d -> %d", before, len(m.picker.Items()))
+	}
+}
+
+// results whose query no longer matches the input are discarded
+func TestStaleSearchResultsDiscarded(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
+	m := newTestModel(t, projectPath, today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "burrito")
+
+	// a result for an earlier query must not populate the picker
+	mm, _ = m.Update(searchResultsMsg{query: "burr", matches: []daylog.SearchMatch{{Date: "2026/07/09", Line: "- x"}}})
+	m = mm.(Model)
+	if len(m.picker.Items()) != 0 {
+		t.Errorf("stale search results populated the picker: %d rows", len(m.picker.Items()))
+	}
+}
+
+// a search jump to a day GetLogs filtered out (empty log.md) still lands
+func TestSearchJumpToFilteredDay(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+
+	// the day isn't in m.days; selecting it via a result must insert + land
+	mm, _ = m.Update(searchResultsMsg{query: "", matches: nil})
+	m = mm.(Model)
+	m.picker.SetItems([]list.Item{pickerItem{label: "2026/07/01: - note", value: "2026/07/01"}})
+	m.picker.Select(0)
+
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day != "2026/07/01" {
+		t.Fatalf("expected to land on the searched day, got %s", day)
+	}
+	if !slices.Contains(m.days, "2026/07/01") {
+		t.Error("expected the searched day inserted into the day list")
+	}
+}
+
+// long search rows and tiny terminals must not overflow or panic
+func TestLayoutRobustAtExtremes(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+
+	// long row is truncated to the terminal width
+	m := newTestModel(t, t.TempDir(), today)
+	m.mode = modeSearch
+	m.picker.SetItems([]list.Item{pickerItem{label: "2026/07/10: " + strings.Repeat("x", 200)}})
+	m.layout()
+	view := m.modalView("search", m.searchInput.View(), "", 22)
+	for _, ln := range strings.Split(view, "\n") {
+		if w := lipgloss.Width(ln); w > 80 {
+			t.Fatalf("modal row width %d exceeds terminal width 80", w)
+		}
+	}
+
+	// extreme sizes across every mode must not panic
+	for _, s := range [][2]int{{0, 0}, {1, 1}, {2, 2}, {80, 3}} {
+		mm, _ := m.Update(tea.WindowSizeMsg{Width: s[0], Height: s[1]})
+		m = mm.(Model)
+		for _, mode := range []mode{modeBrowse, modeInput, modeSearch, modeDays, modeProjects, modeTodos} {
+			m.mode = mode
+			_ = m.View()
+		}
 	}
 }
