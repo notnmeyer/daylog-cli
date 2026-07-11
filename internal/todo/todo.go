@@ -34,20 +34,21 @@ func Parse(content string) []Item {
 		if !IsTodo(line) {
 			continue
 		}
-
-		item := Item{Line: i}
-		switch {
-		case isChecked(line):
-			item.Done = true
-			item.Text = strings.TrimSpace(line[len(checkedMark):])
-		case strings.HasPrefix(line, uncheckedMark):
-			item.Text = strings.TrimSpace(line[len(uncheckedMark):])
-		default:
-			item.Text = strings.TrimSpace(strings.TrimPrefix(line, listPrefix))
-		}
-		items = append(items, item)
+		items = append(items, Item{Line: i, Text: itemText(line), Done: isChecked(line)})
 	}
 	return items
+}
+
+// itemText strips a todo line's checkbox/list marker down to its text
+func itemText(line string) string {
+	switch {
+	case isChecked(line):
+		return strings.TrimSpace(line[len(checkedMark):])
+	case strings.HasPrefix(line, uncheckedMark):
+		return strings.TrimSpace(line[len(uncheckedMark):])
+	default:
+		return strings.TrimSpace(strings.TrimPrefix(line, listPrefix))
+	}
 }
 
 // ToggleMatching flips the checkbox on item's line, but only if the
@@ -58,7 +59,9 @@ func ToggleMatching(content string, item Item) (string, error) {
 	if item.Line < 0 || item.Line >= len(lines) {
 		return "", fmt.Errorf("todo %q is no longer at line %d", item.Text, item.Line)
 	}
-	if !IsTodo(lines[item.Line]) || !strings.Contains(lines[item.Line], item.Text) {
+	// compare the extracted text exactly; a substring test would let a
+	// stale index toggle a longer todo that merely contains this one's text
+	if !IsTodo(lines[item.Line]) || itemText(lines[item.Line]) != item.Text {
 		return "", fmt.Errorf("todo %q moved; reopen the list", item.Text)
 	}
 	return Toggle(content, item.Line)
