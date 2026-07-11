@@ -106,7 +106,9 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 			log.Fatal(err)
 		}
 
-		if showPrevious {
+		// the tui browses history via its own day list, so --prev is a
+		// no-op there rather than aborting when no previous log exists
+		if showPrevious && cmd.Name() != "tui" {
 			if err := dl.UsePrevious(time.Now()); err != nil {
 				log.Fatal(err)
 			}
