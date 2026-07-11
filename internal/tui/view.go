@@ -135,6 +135,9 @@ func (m Model) headerView() string {
 	header := "daylog · " + m.project
 	if day, ok := m.selectedDay(); ok {
 		primary, secondary := dayLabel(day, m.today)
+		if t, err := time.Parse(dayFormat, day); err == nil {
+			primary = t.Format("Mon") + " " + primary
+		}
 		header += " · " + primary
 		// only show the relative hint (today/yesterday/N days ago); for
 		// older days the secondary is just the raw date, which duplicates
