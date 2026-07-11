@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -19,28 +20,23 @@ const (
 	modeInput
 	modeProjects
 	modeTodos
+	modeDays
+	modeSearch
 )
-
-type focusArea int
-
-const (
-	focusDays focusArea = iota
-	focusViewport
-)
-
-// wide enough for "  wednesday '25"
-const dayListWidth = 15
 
 type Model struct {
 	project     string
 	projectPath string
 	today       time.Time
 	mode        mode
-	focus       focusArea
-	days        list.Model
+	days        []string // YYYY/MM/DD, newest first
+	dayIdx      int
 	vp          viewport.Model
 	input       textinput.Model
 	picker      list.Model
+	dayFilter   textinput.Model
+	searchInput textinput.Model
+	searchSeq   int
 	todos       []todo.Item
 	md          mdRenderer
 	keys        keyMap
@@ -61,19 +57,19 @@ func Run(dl *daylog.DayLog, project string) error {
 func New(projectPath, project string, today time.Time) Model {
 	st := defaultStyles()
 
-	l := list.New(nil, dayDelegate{styles: st, today: today}, 0, 0)
-	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
-	l.SetShowHelp(false)
-	l.SetShowPagination(false)
-	l.SetFilteringEnabled(false)
-	l.DisableQuitKeybindings()
-
 	input := textinput.New()
 	input.Prompt = "append › "
 	input.Placeholder = "what did you do?"
 
-	// shared by the project switcher and (later) todo picker
+	dayFilter := textinput.New()
+	dayFilter.Prompt = " ⌕ "
+	dayFilter.Placeholder = "type to filter"
+
+	searchInput := textinput.New()
+	searchInput.Prompt = " / "
+	searchInput.Placeholder = "search all logs"
+
+	// shared by the day, project, and todo pickers
 	picker := list.New(nil, pickerDelegate{styles: st}, 0, 0)
 	picker.SetShowTitle(false)
 	picker.SetShowStatusBar(false)
@@ -82,16 +78,21 @@ func New(projectPath, project string, today time.Time) Model {
 	picker.SetFilteringEnabled(false)
 	picker.DisableQuitKeybindings()
 
+	vp := viewport.New(0, 0)
+	// d opens the day picker, so rebind half-page-down off of it
+	vp.KeyMap.HalfPageDown = key.NewBinding(key.WithKeys("ctrl+d"))
+	vp.KeyMap.HalfPageUp = key.NewBinding(key.WithKeys("u", "ctrl+u"))
+
 	return Model{
 		project:     project,
 		projectPath: projectPath,
 		today:       today,
 		mode:        modeBrowse,
-		focus:       focusDays,
-		days:        l,
-		vp:          viewport.New(0, 0),
+		vp:          vp,
 		input:       input,
 		picker:      picker,
+		dayFilter:   dayFilter,
+		searchInput: searchInput,
 		md:          newMDRenderer(),
 		keys:        defaultKeyMap(),
 		help:        help.New(),
@@ -106,7 +107,7 @@ func (m Model) Init() tea.Cmd {
 func (m *Model) layout() {
 	m.help.Width = m.width
 
-	frameW, frameH := m.styles.focusedPane.GetFrameSize()
+	frameW, frameH := m.styles.pane.GetFrameSize()
 	headerH := lipglossHeight(m.headerView())
 	footerH := lipglossHeight(m.footerView())
 
@@ -115,9 +116,7 @@ func (m *Model) layout() {
 		bodyH = 1
 	}
 
-	m.days.SetSize(dayListWidth, bodyH)
-
-	vpW := m.width - dayListWidth - 2*frameW
+	vpW := m.width - frameW
 	if vpW < 1 {
 		vpW = 1
 	}
@@ -126,19 +125,30 @@ func (m *Model) layout() {
 
 	m.input.Width = m.width - len(m.input.Prompt) - 4
 
-	pickerH := min(10, bodyH-2, max(1, len(m.picker.Items())))
+	pickerW := min(60, m.width-8)
+	if m.mode == modeSearch {
+		// search rows carry whole log lines; give them more room
+		pickerW = min(90, m.width-8)
+	}
+	pickerH := min(15, bodyH-4)
+	// the day and search pickers keep a stable height while typing;
+	// the project/todo pickers shrink to fit their items
+	if m.mode != modeDays && m.mode != modeSearch {
+		pickerH = min(pickerH, max(1, len(m.picker.Items())))
+	}
 	if pickerH < 1 {
 		pickerH = 1
 	}
-	m.picker.SetSize(min(40, m.width-8), pickerH)
+	m.picker.SetSize(pickerW, pickerH)
+	m.dayFilter.Width = pickerW - len(m.dayFilter.Prompt) - 2
+	m.searchInput.Width = pickerW - len(m.searchInput.Prompt) - 2
 }
 
 func (m Model) selectedDay() (string, bool) {
-	it, ok := m.days.SelectedItem().(dayItem)
-	if !ok {
+	if m.dayIdx < 0 || m.dayIdx >= len(m.days) {
 		return "", false
 	}
-	return string(it), true
+	return m.days[m.dayIdx], true
 }
 
 // renderSelected re-renders the currently selected day into the viewport

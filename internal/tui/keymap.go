@@ -3,33 +3,43 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Tab    key.Binding
-	Top    key.Binding
-	Bottom key.Binding
+	Older    key.Binding
+	Newer    key.Binding
+	JumpDay  key.Binding
+	Search   key.Binding
+	Scroll   key.Binding
+	Top      key.Binding
+	Bottom   key.Binding
 	Append   key.Binding
 	Edit     key.Binding
 	Copy     key.Binding
 	Projects key.Binding
 	Todos    key.Binding
-	Help   key.Binding
-	Quit   key.Binding
+	Help     key.Binding
+	Quit     key.Binding
 }
 
 func defaultKeyMap() keyMap {
 	return keyMap{
-		Up: key.NewBinding(
-			key.WithKeys("k", "up"),
-			key.WithHelp("↑/k", "up"),
+		Older: key.NewBinding(
+			key.WithKeys("h", "left"),
+			key.WithHelp("←/h", "older day"),
 		),
-		Down: key.NewBinding(
-			key.WithKeys("j", "down"),
-			key.WithHelp("↓/j", "down"),
+		Newer: key.NewBinding(
+			key.WithKeys("l", "right"),
+			key.WithHelp("→/l", "newer day"),
 		),
-		Tab: key.NewBinding(
-			key.WithKeys("tab"),
-			key.WithHelp("tab", "switch focus"),
+		JumpDay: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "jump to day"),
+		),
+		Search: key.NewBinding(
+			key.WithKeys("/"),
+			key.WithHelp("/", "search"),
+		),
+		Scroll: key.NewBinding(
+			key.WithKeys("j", "k", "up", "down"),
+			key.WithHelp("↑↓/jk", "scroll"),
 		),
 		Top: key.NewBinding(
 			key.WithKeys("g"),
@@ -71,14 +81,15 @@ func defaultKeyMap() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Append, k.Edit, k.Copy, k.Todos, k.Projects, k.Help, k.Quit}
+	return []key.Binding{k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Todos, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Up, k.Down, k.Tab},
+		{k.Older, k.Newer, k.JumpDay, k.Search},
 		{k.Append, k.Edit, k.Copy},
 		{k.Todos, k.Projects},
-		{k.Top, k.Bottom, k.Help, k.Quit},
+		{k.Scroll, k.Top, k.Bottom},
+		{k.Help, k.Quit},
 	}
 }

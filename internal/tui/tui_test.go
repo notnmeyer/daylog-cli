@@ -165,15 +165,15 @@ func newTestModel(t *testing.T, projectPath string, today time.Time) Model {
 	return m
 }
 
-func TestSelectionChangeRendersDay(t *testing.T) {
+func TestDaySteppingRendersDay(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
 	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
 
 	m := newTestModel(t, projectPath, today)
 
-	// today is selected; j moves to 2026/07/09
-	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	// today is selected; h steps to the older 2026/07/09
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
 	m = mm.(Model)
 
 	day, _ := m.selectedDay()
@@ -183,31 +183,194 @@ func TestSelectionChangeRendersDay(t *testing.T) {
 
 	rendered, ok := findDayRendered(t, execCmd(t, cmd))
 	if !ok {
-		t.Fatal("expected a dayRenderedMsg after selection change")
+		t.Fatal("expected a dayRenderedMsg after stepping days")
 	}
 	if !strings.Contains(rendered.content, "burrito") {
 		t.Errorf("expected rendered log content, got %q", rendered.content)
 	}
+
+	// h at the oldest day is a no-op
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day != "2026/07/09" {
+		t.Errorf("expected selection clamped at oldest day, got %s", day)
+	}
+	if cmd != nil {
+		t.Error("expected no cmd when clamped")
+	}
+
+	// l steps back to today
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'l'}})
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected selection back on today, got %s", day)
+	}
 }
 
-func TestTabTogglesFocus(t *testing.T) {
+func TestDayPickerFlow(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
-	m := newTestModel(t, t.TempDir(), today)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
+	seedLog(t, projectPath, "2026/06/17", "- june entry\n")
 
-	if m.focus != focusDays {
-		t.Fatal("expected initial focus on day list")
+	m := newTestModel(t, projectPath, today)
+
+	// d opens the picker with all days, current day selected
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = mm.(Model)
+	if m.mode != modeDays {
+		t.Fatal("expected days mode after d")
+	}
+	if len(m.picker.Items()) != 3 {
+		t.Fatalf("expected 3 days in picker, got %d", len(m.picker.Items()))
+	}
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/07/10" {
+		t.Errorf("expected current day pre-selected, got %q", item.value)
 	}
 
-	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
-	m = mm.(Model)
-	if m.focus != focusViewport {
-		t.Error("expected focus on viewport after tab")
+	// typing filters fuzzily
+	m = typeString(t, m, "jun")
+	if len(m.picker.Items()) != 1 {
+		t.Fatalf("expected 1 match for 'jun', got %d", len(m.picker.Items()))
+	}
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/06/17" {
+		t.Errorf("expected june day matched, got %q", item.value)
 	}
 
-	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	// enter jumps to the match and renders it
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = mm.(Model)
-	if m.focus != focusDays {
-		t.Error("expected focus back on day list after second tab")
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after enter")
+	}
+	if day, _ := m.selectedDay(); day != "2026/06/17" {
+		t.Fatalf("expected jump to 2026/06/17, got %s", day)
+	}
+	rendered, ok := findDayRendered(t, execCmd(t, cmd))
+	if !ok {
+		t.Fatal("expected a dayRenderedMsg after jump")
+	}
+	// glamour styles each word separately, so match a single word
+	if !strings.Contains(rendered.content, "june") {
+		t.Errorf("expected june log rendered, got %q", rendered.content)
+	}
+}
+
+func TestSearchFlow(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
+	seedLog(t, projectPath, "2026/06/17", "- burrito planning\n- unrelated\n")
+
+	m := newTestModel(t, projectPath, today)
+
+	// / opens search mode with an empty picker
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	if m.mode != modeSearch {
+		t.Fatal("expected search mode after /")
+	}
+	if len(m.picker.Items()) != 0 {
+		t.Fatal("expected empty picker before typing")
+	}
+
+	m = typeString(t, m, "burrito")
+
+	// a stale debounce (older keystroke) is ignored
+	_, cmd := m.Update(searchDebounceMsg{seq: m.searchSeq - 1})
+	if cmd != nil {
+		t.Error("expected stale debounce to be ignored")
+	}
+
+	// the latest debounce runs the search
+	mm, cmd = m.Update(searchDebounceMsg{seq: m.searchSeq})
+	m = mm.(Model)
+	if cmd == nil {
+		t.Fatal("expected a search cmd from the latest debounce")
+	}
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	results, ok := msgs[0].(searchResultsMsg)
+	if !ok {
+		t.Fatalf("expected searchResultsMsg, got %T", msgs[0])
+	}
+	if len(results.matches) != 2 {
+		t.Fatalf("expected 2 matches, got %d", len(results.matches))
+	}
+
+	mm, _ = m.Update(results)
+	m = mm.(Model)
+	if len(m.picker.Items()) != 2 {
+		t.Fatalf("expected 2 picker rows, got %d", len(m.picker.Items()))
+	}
+	// rows match the CLI output format, most recent first
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "2026/07/09: - ate a burrito" {
+		t.Errorf("expected CLI-style row, got %q", item.label)
+	}
+
+	// down + enter opens the older match's log
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = mm.(Model)
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after enter")
+	}
+	if day, _ := m.selectedDay(); day != "2026/06/17" {
+		t.Fatalf("expected jump to 2026/06/17, got %s", day)
+	}
+	rendered, ok := findDayRendered(t, execCmd(t, cmd))
+	if !ok {
+		t.Fatal("expected a dayRenderedMsg after opening a result")
+	}
+	if !strings.Contains(rendered.content, "planning") {
+		t.Errorf("expected matched log rendered, got %q", rendered.content)
+	}
+}
+
+func TestSearchEscCancels(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
+
+	m := newTestModel(t, projectPath, today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "burrito")
+
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Error("expected esc to close search, not quit")
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected selection unchanged after cancel, got %s", day)
+	}
+}
+
+func TestDayPickerEscCancels(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
+
+	m := newTestModel(t, projectPath, today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = mm.(Model)
+	m = typeString(t, m, "07/09")
+
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Error("expected esc to close day picker, not quit")
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected selection unchanged after cancel, got %s", day)
 	}
 }
 
@@ -404,15 +567,15 @@ func TestProjectSwitcherFlow(t *testing.T) {
 	// simulate the load; current project should be pre-selected
 	mm, _ = m.Update(projectsLoadedMsg{projects: []string{"default", "work"}})
 	m = mm.(Model)
-	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "default" {
-		t.Errorf("expected current project pre-selected, got %q", item)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "default" {
+		t.Errorf("expected current project pre-selected, got %q", item.value)
 	}
 
 	// navigate to "work"; simulate the switch completing
 	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
 	m = mm.(Model)
-	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "work" {
-		t.Fatalf("expected work selected, got %q", item)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "work" {
+		t.Fatalf("expected work selected, got %q", item.value)
 	}
 
 	newPath := t.TempDir()
@@ -492,8 +655,8 @@ func TestTodoFlow(t *testing.T) {
 	if len(m.todos) != 2 {
 		t.Fatalf("expected 2 todos, got %d", len(m.todos))
 	}
-	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "[ ] TODO: buy tortillas" {
-		t.Errorf("expected unchecked first item, got %q", item)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "[ ] TODO: buy tortillas" {
+		t.Errorf("expected unchecked first item, got %q", item.label)
 	}
 
 	// space toggles the selected todo on disk
@@ -522,8 +685,8 @@ func TestTodoFlow(t *testing.T) {
 		mm, _ = m.Update(msg)
 		m = mm.(Model)
 	}
-	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "[x] TODO: buy tortillas" {
-		t.Errorf("expected checked first item after reload, got %q", item)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "[x] TODO: buy tortillas" {
+		t.Errorf("expected checked first item after reload, got %q", item.label)
 	}
 
 	// enter confirms/closes, same as esc

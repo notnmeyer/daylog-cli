@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -18,7 +19,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.renderSelected()
 
 	case daysLoadedMsg:
-		return m.onDaysLoaded(msg)
+		prev, _ := m.selectedDay()
+		m.days = msg.days
+		m.dayIdx = 0
+		if idx := slices.Index(m.days, prev); idx >= 0 {
+			m.dayIdx = idx
+		}
+		return m, m.renderSelected()
 
 	case dayRenderedMsg:
 		m.vp.SetContent(msg.content)
@@ -38,7 +45,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		items := make([]list.Item, len(msg.projects))
 		selected := 0
 		for i, p := range msg.projects {
-			items[i] = pickerItem(p)
+			items[i] = pickerItem{label: p, value: p}
 			if p == m.project {
 				selected = i
 			}
@@ -53,7 +60,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projectPath = msg.path
 		m.mode = modeBrowse
 		// drop the old project's selection so the reload lands on today
-		m.days.SetItems(nil)
+		m.days = nil
 		return m, loadDays(m.projectPath, m.today)
 
 	case todosLoadedMsg:
@@ -73,7 +80,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if td.Done {
 				box = "[x] "
 			}
-			items[i] = pickerItem(box + td.Text)
+			items[i] = pickerItem{label: box + td.Text}
 		}
 		m.picker.SetItems(items)
 		m.picker.Select(selected)
@@ -86,6 +93,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, tea.Batch(loadTodos(m.projectPath, day), m.renderSelected())
+
+	case searchDebounceMsg:
+		// only the latest keystroke's debounce runs the search
+		if m.mode != modeSearch || msg.seq != m.searchSeq {
+			return m, nil
+		}
+		query := strings.TrimSpace(m.searchInput.Value())
+		if query == "" {
+			m.picker.SetItems(nil)
+			return m, nil
+		}
+		return m, runSearch(m.projectPath, query)
+
+	case searchResultsMsg:
+		if m.mode != modeSearch || msg.query != strings.TrimSpace(m.searchInput.Value()) {
+			return m, nil
+		}
+		items := make([]list.Item, len(msg.matches))
+		for i, match := range msg.matches {
+			items[i] = pickerItem{label: match.Date + ": " + match.Line, value: match.Date}
+		}
+		m.picker.SetItems(items)
+		m.picker.Select(0)
+		return m, nil
 
 	case copiedMsg:
 		m.status = "Copied to clipboard."
@@ -109,25 +140,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	return m, nil
-}
-
-func (m Model) onDaysLoaded(msg daysLoadedMsg) (tea.Model, tea.Cmd) {
-	prev, _ := m.selectedDay()
-
-	items := make([]list.Item, len(msg.days))
-	selected := 0
-	for i, d := range msg.days {
-		items[i] = dayItem(d)
-		if d == prev {
-			selected = i
-		}
+	if m.mode == modeDays {
+		var cmd tea.Cmd
+		m.dayFilter, cmd = m.dayFilter.Update(msg)
+		return m, cmd
 	}
 
-	m.days.SetItems(items)
-	m.days.Select(selected)
+	if m.mode == modeSearch {
+		var cmd tea.Cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		return m, cmd
+	}
 
-	return m, m.renderSelected()
+	return m, nil
 }
 
 func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -138,6 +163,10 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onPickerKey(msg)
 	case modeTodos:
 		return m.onTodoKey(msg)
+	case modeDays:
+		return m.onDayPickerKey(msg)
+	case modeSearch:
+		return m.onSearchKey(msg)
 	}
 
 	switch {
@@ -178,34 +207,46 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.picker.SetItems(nil)
 		return m, loadTodos(m.projectPath, day)
 
-	case key.Matches(msg, m.keys.Tab):
-		if m.focus == focusDays {
-			m.focus = focusViewport
-		} else {
-			m.focus = focusDays
+	case key.Matches(msg, m.keys.Older):
+		if m.dayIdx < len(m.days)-1 {
+			m.dayIdx++
+			return m, m.renderSelected()
 		}
 		return m, nil
+
+	case key.Matches(msg, m.keys.Newer):
+		if m.dayIdx > 0 {
+			m.dayIdx--
+			return m, m.renderSelected()
+		}
+		return m, nil
+
+	case key.Matches(msg, m.keys.JumpDay):
+		m.mode = modeDays
+		m.status = ""
+		m.dayFilter.Reset()
+		m.picker.SetItems(dayPickerItems(m.days, m.today, ""))
+		m.picker.Select(m.dayIdx)
+		m.layout()
+		return m, m.dayFilter.Focus()
+
+	case key.Matches(msg, m.keys.Search):
+		m.mode = modeSearch
+		m.status = ""
+		m.searchInput.Reset()
+		m.picker.SetItems(nil)
+		m.layout()
+		return m, m.searchInput.Focus()
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
 		m.layout()
 		return m, nil
-	}
 
-	if m.focus == focusDays {
-		before := m.days.Index()
-		var cmd tea.Cmd
-		m.days, cmd = m.days.Update(msg)
-		if m.days.Index() != before {
-			return m, tea.Batch(cmd, m.renderSelected())
-		}
-		return m, cmd
-	}
-
-	switch {
 	case key.Matches(msg, m.keys.Top):
 		m.vp.GotoTop()
 		return m, nil
+
 	case key.Matches(msg, m.keys.Bottom):
 		m.vp.GotoBottom()
 		return m, nil
@@ -216,6 +257,76 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m Model) onDayPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		item, ok := m.picker.SelectedItem().(pickerItem)
+		m.mode = modeBrowse
+		m.dayFilter.Blur()
+		if !ok {
+			return m, nil
+		}
+		if idx := slices.Index(m.days, item.value); idx >= 0 {
+			m.dayIdx = idx
+		}
+		return m, m.renderSelected()
+
+	case tea.KeyEsc:
+		m.mode = modeBrowse
+		m.dayFilter.Blur()
+		return m, nil
+
+	case tea.KeyUp, tea.KeyCtrlP:
+		m.picker.CursorUp()
+		return m, nil
+
+	case tea.KeyDown, tea.KeyCtrlN:
+		m.picker.CursorDown()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.dayFilter, cmd = m.dayFilter.Update(msg)
+	m.picker.SetItems(dayPickerItems(m.days, m.today, strings.TrimSpace(m.dayFilter.Value())))
+	m.picker.Select(0)
+	m.layout()
+	return m, cmd
+}
+
+func (m Model) onSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyEnter:
+		item, ok := m.picker.SelectedItem().(pickerItem)
+		m.mode = modeBrowse
+		m.searchInput.Blur()
+		if !ok {
+			return m, nil
+		}
+		if idx := slices.Index(m.days, item.value); idx >= 0 {
+			m.dayIdx = idx
+		}
+		return m, m.renderSelected()
+
+	case tea.KeyEsc:
+		m.mode = modeBrowse
+		m.searchInput.Blur()
+		return m, nil
+
+	case tea.KeyUp, tea.KeyCtrlP:
+		m.picker.CursorUp()
+		return m, nil
+
+	case tea.KeyDown, tea.KeyCtrlN:
+		m.picker.CursorDown()
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.searchInput, cmd = m.searchInput.Update(msg)
+	m.searchSeq++
+	return m, tea.Batch(cmd, debounceSearch(m.searchSeq))
+}
+
 func (m Model) onPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.Type {
 	case tea.KeyEnter:
@@ -224,7 +335,7 @@ func (m Model) onPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeBrowse
 			return m, nil
 		}
-		return m, switchProject(string(item))
+		return m, switchProject(item.value)
 
 	case tea.KeyEsc:
 		m.mode = modeBrowse

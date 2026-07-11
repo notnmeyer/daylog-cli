@@ -1,8 +1,6 @@
 module github.com/notnmeyer/daylog-cli
 
-go 1.24.0
-
-toolchain go1.24.3
+go 1.24.5
 
 require (
 	github.com/adrg/xdg v0.4.0
@@ -13,6 +11,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/markusmobius/go-dateparser v1.2.3
 	github.com/muesli/termenv v0.16.0
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/spf13/cobra v1.9.1
 )
 
@@ -50,7 +49,6 @@ require (
 	github.com/muesli/roff v0.1.0 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
-	github.com/sahilm/fuzzy v0.1.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/tetratelabs/wazero v1.2.1 // indirect
 	github.com/wasilibs/go-re2 v1.3.0 // indirect

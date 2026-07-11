@@ -9,40 +9,65 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sahilm/fuzzy"
 )
 
-type dayItem string
-
-func (d dayItem) FilterValue() string { return string(d) }
-
-type dayDelegate struct {
-	styles styles
-	today  time.Time
+// pickerItem is the shared item for the day/project/todo pickers.
+// label is what renders; value carries the selection payload
+type pickerItem struct {
+	label string
+	value string
 }
 
-func (dayDelegate) Height() int                             { return 2 }
-func (dayDelegate) Spacing() int                            { return 1 }
-func (dayDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+func (p pickerItem) FilterValue() string { return p.label }
 
-func (d dayDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	day, ok := item.(dayItem)
+type pickerDelegate struct {
+	styles styles
+}
+
+func (pickerDelegate) Height() int                             { return 1 }
+func (pickerDelegate) Spacing() int                            { return 0 }
+func (pickerDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
+
+func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	p, ok := item.(pickerItem)
 	if !ok {
 		return
 	}
 
-	primary, secondary := dayLabel(string(day), d.today)
-
-	primaryStyle := d.styles.normalDay
-	prefix := "  "
 	if index == m.Index() {
-		primaryStyle = d.styles.selectedDay
-		prefix = "› "
+		fmt.Fprint(w, d.styles.selected.Render("› "+p.label))
+		return
+	}
+	fmt.Fprint(w, d.styles.normal.Render("  "+p.label))
+}
+
+// dayPickerItems builds picker items for days, fuzzy-filtered by query.
+// matching considers both the raw date and its label, so "jun 17",
+// "0617", and "yesterday" all work
+func dayPickerItems(days []string, today time.Time, query string) []list.Item {
+	labels := make([]string, len(days))
+	targets := make([]string, len(days))
+	for i, day := range days {
+		primary, secondary := dayLabel(day, today)
+		labels[i] = primary + " · " + secondary
+		targets[i] = day + " " + labels[i]
 	}
 
-	fmt.Fprintf(w, "%s\n%s",
-		primaryStyle.Render(prefix+primary),
-		d.styles.dimDay.Render("  "+secondary),
-	)
+	if query == "" {
+		items := make([]list.Item, len(days))
+		for i, day := range days {
+			items[i] = pickerItem{label: labels[i], value: day}
+		}
+		return items
+	}
+
+	matches := fuzzy.Find(query, targets)
+	items := make([]list.Item, len(matches))
+	for i, match := range matches {
+		items[i] = pickerItem{label: labels[match.Index], value: days[match.Index]}
+	}
+	return items
 }
 
 // dayLabel turns "2026/07/10" into a compact date plus an addressable
@@ -75,46 +100,12 @@ func dayLabel(day string, today time.Time) (string, string) {
 	return primary, secondary
 }
 
-type pickerItem string
-
-func (p pickerItem) FilterValue() string { return string(p) }
-
-type pickerDelegate struct {
-	styles styles
-}
-
-func (pickerDelegate) Height() int                             { return 1 }
-func (pickerDelegate) Spacing() int                            { return 0 }
-func (pickerDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
-
-func (d pickerDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	p, ok := item.(pickerItem)
-	if !ok {
-		return
-	}
-
-	if index == m.Index() {
-		fmt.Fprint(w, d.styles.selectedDay.Render("› "+string(p)))
-		return
-	}
-	fmt.Fprint(w, d.styles.normalDay.Render("  "+string(p)))
-}
-
 func (m Model) View() string {
 	if !m.ready {
 		return "loading…"
 	}
 
-	listStyle, vpStyle := m.styles.blurredPane, m.styles.focusedPane
-	if m.focus == focusDays {
-		listStyle, vpStyle = m.styles.focusedPane, m.styles.blurredPane
-	}
-
-	body := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		listStyle.Render(m.days.View()),
-		vpStyle.Render(m.vp.View()),
-	)
+	body := m.styles.pane.Render(m.vp.View())
 
 	switch m.mode {
 	case modeProjects:
@@ -122,14 +113,30 @@ func (m Model) View() string {
 	case modeTodos:
 		day, _ := m.selectedDay()
 		body = m.pickerView("todos · "+day, lipgloss.Height(body))
+	case modeDays:
+		body = m.dayPickerView(lipgloss.Height(body))
+	case modeSearch:
+		body = m.searchView(lipgloss.Height(body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
 }
 
+func (m Model) headerView() string {
+	header := "daylog · " + m.project
+	if day, ok := m.selectedDay(); ok {
+		primary, secondary := dayLabel(day, m.today)
+		header += " · " + primary
+		if secondary != "" {
+			header += " · " + secondary
+		}
+	}
+	return m.styles.header.Render(header)
+}
+
 // pickerView renders the picker as a centered modal in place of the body
 func (m Model) pickerView(title string, height int) string {
-	box := m.styles.focusedPane.Render(lipgloss.JoinVertical(
+	box := m.styles.pane.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
 		m.styles.header.Render(title),
 		m.picker.View(),
@@ -138,21 +145,43 @@ func (m Model) pickerView(title string, height int) string {
 	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
-func (m Model) headerView() string {
-	return m.styles.header.Render("daylog · " + m.project)
+// dayPickerView is the picker plus a live fuzzy-filter input
+func (m Model) dayPickerView(height int) string {
+	box := m.styles.pane.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.styles.header.Render("jump to day"),
+		m.dayFilter.View(),
+		m.picker.View(),
+	))
+
+	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
+}
+
+// searchView is the picker plus a live search input; rows match the
+// CLI's `date: line` output
+func (m Model) searchView(height int) string {
+	box := m.styles.pane.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		m.styles.header.Render("search"),
+		m.searchInput.View(),
+		m.picker.View(),
+	))
+
+	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
 }
 
 func (m Model) footerView() string {
-	if m.mode == modeInput {
+	switch m.mode {
+	case modeInput:
 		return m.styles.footer.UnsetFaint().Render(m.input.View())
-	}
-
-	if m.mode == modeProjects {
+	case modeProjects:
 		return m.styles.footer.Render("enter select • esc cancel")
-	}
-
-	if m.mode == modeTodos {
+	case modeTodos:
 		return m.styles.footer.Render("space toggle • enter/esc close")
+	case modeDays:
+		return m.styles.footer.Render("type to filter • ↑/↓ move • enter jump • esc cancel")
+	case modeSearch:
+		return m.styles.footer.Render("type to search • ↑/↓ move • enter open • esc cancel")
 	}
 
 	if m.status != "" {

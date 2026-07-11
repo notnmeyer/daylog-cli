@@ -31,6 +31,12 @@ type todosLoadedMsg struct {
 	todos []todo.Item
 }
 type todoToggledMsg struct{}
+
+type searchDebounceMsg struct{ seq int }
+type searchResultsMsg struct {
+	query   string
+	matches []daylog.SearchMatch
+}
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -178,6 +184,26 @@ func toggleTodo(projectPath, day string, line int) tea.Cmd {
 		}
 
 		return todoToggledMsg{}
+	}
+}
+
+// debounceSearch fires after a pause in typing; stale sequence numbers
+// are dropped by the update loop
+func debounceSearch(seq int) tea.Cmd {
+	return tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg {
+		return searchDebounceMsg{seq: seq}
+	})
+}
+
+// runSearch is case-insensitive: interactive search shouldn't demand
+// exact casing (the CLI stays case-sensitive with its -i flag)
+func runSearch(projectPath, query string) tea.Cmd {
+	return func() tea.Msg {
+		matches, err := daylog.Search(projectPath, query, true)
+		if err != nil {
+			return errMsg{err}
+		}
+		return searchResultsMsg{query: query, matches: matches}
 	}
 }
 
