@@ -125,12 +125,13 @@ func (m *Model) layout() {
 
 	m.input.Width = m.width - len(m.input.Prompt) - 4
 
-	pickerW := min(60, m.width-8)
+	pickerW := min(60, m.width-12)
 	if m.mode == modeSearch {
 		// search rows carry whole log lines; give them more room
-		pickerW = min(90, m.width-8)
+		pickerW = min(90, m.width-12)
 	}
-	pickerH := min(15, bodyH-4)
+	// leave room for the modal frame, title, input, and gaps
+	pickerH := min(15, bodyH-8)
 	// the day and search pickers keep a stable height while typing;
 	// the project/todo pickers shrink to fit their items
 	if m.mode != modeDays && m.mode != modeSearch {

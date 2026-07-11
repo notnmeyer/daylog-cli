@@ -136,9 +136,9 @@ func (m Model) headerView() string {
 
 // pickerView renders the picker as a centered modal in place of the body
 func (m Model) pickerView(title string, height int) string {
-	box := m.styles.pane.Render(lipgloss.JoinVertical(
+	box := m.styles.modal.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		m.styles.header.Render(title),
+		m.styles.modalTitle.Render(title),
 		m.picker.View(),
 	))
 
@@ -147,10 +147,11 @@ func (m Model) pickerView(title string, height int) string {
 
 // dayPickerView is the picker plus a live fuzzy-filter input
 func (m Model) dayPickerView(height int) string {
-	box := m.styles.pane.Render(lipgloss.JoinVertical(
+	box := m.styles.modal.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		m.styles.header.Render("jump to day"),
+		m.styles.modalTitle.Render("jump to day"),
 		m.dayFilter.View(),
+		"",
 		m.picker.View(),
 	))
 
@@ -160,10 +161,11 @@ func (m Model) dayPickerView(height int) string {
 // searchView is the picker plus a live search input; rows match the
 // CLI's `date: line` output
 func (m Model) searchView(height int) string {
-	box := m.styles.pane.Render(lipgloss.JoinVertical(
+	box := m.styles.modal.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		m.styles.header.Render("search"),
+		m.styles.modalTitle.Render("search"),
 		m.searchInput.View(),
+		"",
 		m.picker.View(),
 	))
 
