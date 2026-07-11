@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -143,6 +145,22 @@ func (m *Model) layout() {
 	m.picker.SetSize(pickerW, pickerH)
 	m.dayFilter.Width = pickerW - len(m.dayFilter.Prompt) - 2
 	m.searchInput.Width = pickerW - len(m.searchInput.Prompt) - 2
+}
+
+// selectDay points the browse view at day, inserting it into the
+// newest-first day list if a search landed on a date the list doesn't
+// carry (e.g. a log that GetLogs filtered out). without this a jump to
+// such a day would silently no-op
+func (m *Model) selectDay(day string) {
+	if idx := slices.Index(m.days, day); idx >= 0 {
+		m.dayIdx = idx
+		return
+	}
+	idx, _ := slices.BinarySearchFunc(m.days, day, func(a, b string) int {
+		return strings.Compare(b, a) // days are newest-first
+	})
+	m.days = slices.Insert(m.days, idx, day)
+	m.dayIdx = idx
 }
 
 func (m Model) selectedDay() (string, bool) {

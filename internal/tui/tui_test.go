@@ -207,6 +207,27 @@ func TestDaySteppingRendersDay(t *testing.T) {
 	}
 }
 
+func TestSelectDayInsertsMissingDay(t *testing.T) {
+	m := Model{days: []string{"2026/07/10", "2026/07/08", "2026/07/05"}}
+
+	// an existing day just moves the cursor
+	m.selectDay("2026/07/08")
+	if m.dayIdx != 1 {
+		t.Errorf("expected existing day at idx 1, got %d", m.dayIdx)
+	}
+
+	// a day the list never carried (e.g. a search hit GetLogs filtered
+	// out) is inserted in newest-first order and selected
+	m.selectDay("2026/07/09")
+	if day, _ := m.selectedDay(); day != "2026/07/09" {
+		t.Fatalf("expected to land on the inserted day, got %s", day)
+	}
+	want := []string{"2026/07/10", "2026/07/09", "2026/07/08", "2026/07/05"}
+	if !slices.Equal(m.days, want) {
+		t.Errorf("expected sorted insert %v, got %v", want, m.days)
+	}
+}
+
 func TestDayPickerFlow(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()

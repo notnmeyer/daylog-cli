@@ -266,9 +266,7 @@ func (m Model) onDayPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		if idx := slices.Index(m.days, item.value); idx >= 0 {
-			m.dayIdx = idx
-		}
+		m.selectDay(item.value)
 		return m, m.renderSelected()
 
 	case tea.KeyEsc:
@@ -302,9 +300,7 @@ func (m Model) onSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		if idx := slices.Index(m.days, item.value); idx >= 0 {
-			m.dayIdx = idx
-		}
+		m.selectDay(item.value)
 		return m, m.renderSelected()
 
 	case tea.KeyEsc:
