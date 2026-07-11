@@ -10,6 +10,7 @@ type keyMap struct {
 	Bottom key.Binding
 	Append key.Binding
 	Edit   key.Binding
+	Copy   key.Binding
 	Help   key.Binding
 	Quit   key.Binding
 }
@@ -44,6 +45,10 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("e"),
 			key.WithHelp("e", "edit in $EDITOR"),
 		),
+		Copy: key.NewBinding(
+			key.WithKeys("y"),
+			key.WithHelp("y", "copy log"),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -56,13 +61,13 @@ func defaultKeyMap() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Append, k.Edit, k.Tab, k.Help, k.Quit}
+	return []key.Binding{k.Append, k.Edit, k.Copy, k.Tab, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Tab},
-		{k.Append, k.Edit},
+		{k.Append, k.Edit, k.Copy},
 		{k.Top, k.Bottom},
 		{k.Help, k.Quit},
 	}

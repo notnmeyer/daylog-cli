@@ -337,6 +337,53 @@ func TestEditKeyCreatesLogAndReturnsCmd(t *testing.T) {
 	}
 }
 
+func TestCopyKey(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "- copy me\n")
+
+	m := newTestModel(t, projectPath, today)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if cmd == nil {
+		t.Fatal("expected a copy cmd")
+	}
+	// don't execute it — that would touch the real clipboard
+}
+
+func TestCopyMissingLogReportsError(t *testing.T) {
+	projectPath := t.TempDir()
+
+	msg := copyDay(projectPath, "2026/07/10")()
+	e, ok := msg.(errMsg)
+	if !ok {
+		t.Fatalf("expected errMsg for missing log, got %T", msg)
+	}
+	if !strings.Contains(e.err.Error(), "nothing to copy") {
+		t.Errorf("expected friendly message, got %q", e.err.Error())
+	}
+}
+
+func TestCopiedStatusSetsAndClears(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+
+	mm, cmd := m.Update(copiedMsg{})
+	m = mm.(Model)
+	if m.status != "Copied to clipboard." {
+		t.Errorf("expected copied status, got %q", m.status)
+	}
+	if cmd == nil {
+		t.Fatal("expected a clear-status tick cmd")
+	}
+
+	mm, _ = m.Update(clearStatusMsg{})
+	m = mm.(Model)
+	if m.status != "" {
+		t.Errorf("expected status cleared, got %q", m.status)
+	}
+}
+
 func readLog(t *testing.T, projectPath, day string) []byte {
 	t.Helper()
 

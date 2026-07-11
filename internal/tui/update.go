@@ -2,6 +2,7 @@ package tui
 
 import (
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -32,6 +33,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "error: " + msg.err.Error()
 		}
 		return m, loadDays(m.projectPath, m.today)
+
+	case copiedMsg:
+		m.status = "Copied to clipboard."
+		return m, clearStatusAfter(2 * time.Second)
+
+	case clearStatusMsg:
+		m.status = ""
+		return m, nil
 
 	case errMsg:
 		m.status = "error: " + msg.err.Error()
@@ -88,6 +97,13 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, openEditor(m.projectPath, day)
+
+	case key.Matches(msg, m.keys.Copy):
+		day, ok := m.selectedDay()
+		if !ok {
+			return m, nil
+		}
+		return m, copyDay(m.projectPath, day)
 
 	case key.Matches(msg, m.keys.Tab):
 		if m.focus == focusDays {

@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/notnmeyer/daylog-cli/internal/clipboard"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/file"
@@ -18,6 +20,8 @@ type daysLoadedMsg struct{ days []string }
 type dayRenderedMsg struct{ content string }
 type entryAppendedMsg struct{}
 type editorFinishedMsg struct{ err error }
+type copiedMsg struct{}
+type clearStatusMsg struct{}
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -89,6 +93,31 @@ func openEditor(projectPath, day string) tea.Cmd {
 
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		return editorFinishedMsg{err: err}
+	})
+}
+
+// copyDay copies a day's raw log to the clipboard without creating it
+func copyDay(projectPath, day string) tea.Cmd {
+	return func() tea.Msg {
+		raw, err := editor.Read(logPath(projectPath, day))
+		if err != nil {
+			if os.IsNotExist(err) {
+				return errMsg{fmt.Errorf("nothing to copy for %s", day)}
+			}
+			return errMsg{err}
+		}
+
+		if err := clipboard.Copy([]byte(raw)); err != nil {
+			return errMsg{err}
+		}
+
+		return copiedMsg{}
+	}
+}
+
+func clearStatusAfter(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clearStatusMsg{}
 	})
 }
 
