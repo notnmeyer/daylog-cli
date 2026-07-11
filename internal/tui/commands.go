@@ -16,6 +16,8 @@ const dayFormat = "2006/01/02"
 
 type daysLoadedMsg struct{ days []string }
 type dayRenderedMsg struct{ content string }
+type entryAppendedMsg struct{}
+type editorFinishedMsg struct{ err error }
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -54,6 +56,40 @@ func renderDay(md mdRenderer, projectPath, day string, width int) tea.Cmd {
 
 		return dayRenderedMsg{content: content}
 	}
+}
+
+func appendEntry(projectPath, day, text string) tea.Cmd {
+	return func() tea.Msg {
+		dl, err := dayLogFor(day, projectPath)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		if err := dl.Append(daylog.FormatEntry(text)); err != nil {
+			return errMsg{err}
+		}
+
+		return entryAppendedMsg{}
+	}
+}
+
+// openEditor suspends the program and hands the terminal to $EDITOR.
+// the command must be built before ExecProcess, so the log file is
+// created here (which also carries over todos, matching the CLI)
+func openEditor(projectPath, day string) tea.Cmd {
+	dl, err := dayLogFor(day, projectPath)
+	if err != nil {
+		return func() tea.Msg { return errMsg{err} }
+	}
+
+	c, err := dl.EditorCommand()
+	if err != nil {
+		return func() tea.Msg { return errMsg{err} }
+	}
+
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err: err}
+	})
 }
 
 func logPath(projectPath, day string) string {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
@@ -14,6 +15,7 @@ type mode int
 
 const (
 	modeBrowse mode = iota
+	modeInput
 )
 
 type focusArea int
@@ -34,6 +36,7 @@ type Model struct {
 	focus       focusArea
 	days        list.Model
 	vp          viewport.Model
+	input       textinput.Model
 	md          mdRenderer
 	keys        keyMap
 	help        help.Model
@@ -61,6 +64,10 @@ func New(projectPath, project string, today time.Time) Model {
 	l.SetFilteringEnabled(false)
 	l.DisableQuitKeybindings()
 
+	input := textinput.New()
+	input.Prompt = "append › "
+	input.Placeholder = "what did you do?"
+
 	return Model{
 		project:     project,
 		projectPath: projectPath,
@@ -69,6 +76,7 @@ func New(projectPath, project string, today time.Time) Model {
 		focus:       focusDays,
 		days:        l,
 		vp:          viewport.New(0, 0),
+		input:       input,
 		md:          newMDRenderer(),
 		keys:        defaultKeyMap(),
 		help:        help.New(),
@@ -100,6 +108,8 @@ func (m *Model) layout() {
 	}
 	m.vp.Width = vpW
 	m.vp.Height = bodyH
+
+	m.input.Width = m.width - len(m.input.Prompt) - 4
 }
 
 func (m Model) selectedDay() (string, bool) {

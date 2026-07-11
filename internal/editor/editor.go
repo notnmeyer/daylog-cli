@@ -22,20 +22,30 @@ func chooseEditor() (string, error) {
 	return "", fmt.Errorf("couldn't find an editor. try setting $EDITOR or $VISUAL to your preferred editor.")
 }
 
-func Open(logFile string) error {
+// Command returns an unstarted editor command with no stdio wired,
+// so callers like tea.ExecProcess can attach their own
+func Command(logFile string) (*exec.Cmd, error) {
 	editor, err := chooseEditor()
+	if err != nil {
+		return nil, err
+	}
+
+	return exec.Command(editor, logFile), nil
+}
+
+func Open(logFile string) error {
+	cmd, err := Command(logFile)
 	if err != nil {
 		return err
 	}
 
-	cmd := exec.Command(editor, logFile)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	err = cmd.Start()
 	if err != nil {
-		return fmt.Errorf("Error starting %s: %s", editor, err)
+		return fmt.Errorf("Error starting %s: %s", cmd.Args[0], err)
 	}
 
 	err = cmd.Wait()

@@ -8,6 +8,8 @@ type keyMap struct {
 	Tab    key.Binding
 	Top    key.Binding
 	Bottom key.Binding
+	Append key.Binding
+	Edit   key.Binding
 	Help   key.Binding
 	Quit   key.Binding
 }
@@ -34,6 +36,14 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("G"),
 			key.WithHelp("G", "bottom"),
 		),
+		Append: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "append"),
+		),
+		Edit: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "edit in $EDITOR"),
+		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),
 			key.WithHelp("?", "help"),
@@ -46,12 +56,13 @@ func defaultKeyMap() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Tab, k.Help, k.Quit}
+	return []key.Binding{k.Append, k.Edit, k.Tab, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Tab},
+		{k.Append, k.Edit},
 		{k.Top, k.Bottom},
 		{k.Help, k.Quit},
 	}

@@ -238,6 +238,115 @@ func TestQuitKeys(t *testing.T) {
 	}
 }
 
+func typeString(t *testing.T, m Model, s string) Model {
+	t.Helper()
+
+	for _, r := range s {
+		mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = mm.(Model)
+	}
+	return m
+}
+
+func TestAppendFlow(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+
+	m := newTestModel(t, projectPath, today)
+
+	// a enters input mode
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m = mm.(Model)
+	if m.mode != modeInput {
+		t.Fatal("expected input mode after a")
+	}
+
+	m = typeString(t, m, "ate a burrito")
+
+	// enter submits and returns to browse
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after enter")
+	}
+	if m.input.Value() != "" {
+		t.Error("expected input to be reset")
+	}
+
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	if _, ok := msgs[0].(entryAppendedMsg); !ok {
+		t.Fatalf("expected entryAppendedMsg, got %T", msgs[0])
+	}
+
+	content := string(readLog(t, projectPath, "2026/07/10"))
+	if !strings.Contains(content, "- ate a burrito") {
+		t.Errorf("expected formatted entry in log, got %q", content)
+	}
+	if !strings.HasPrefix(content, "# 2026/07/10") {
+		t.Errorf("expected header in new log, got %q", content)
+	}
+}
+
+func TestInputEscCancels(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+
+	m := newTestModel(t, projectPath, today)
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m = mm.(Model)
+	m = typeString(t, m, "discarded")
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Fatal("expected esc to return to browse mode, not quit")
+	}
+	if cmd != nil {
+		t.Error("expected no cmd on cancel")
+	}
+	if m.input.Value() != "" {
+		t.Error("expected input to be reset on cancel")
+	}
+	if _, err := os.Stat(logPath(projectPath, "2026/07/10")); !os.IsNotExist(err) {
+		t.Error("expected no log file after cancel")
+	}
+}
+
+func TestEditKeyCreatesLogAndReturnsCmd(t *testing.T) {
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "vim")
+
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+
+	m := newTestModel(t, projectPath, today)
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	if cmd == nil {
+		t.Fatal("expected an exec cmd for the editor")
+	}
+
+	content := string(readLog(t, projectPath, "2026/07/10"))
+	if !strings.HasPrefix(content, "# 2026/07/10") {
+		t.Errorf("expected log created with header before editor opens, got %q", content)
+	}
+}
+
+func readLog(t *testing.T, projectPath, day string) []byte {
+	t.Helper()
+
+	b, err := os.ReadFile(logPath(projectPath, day))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 func TestDayLabel(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 

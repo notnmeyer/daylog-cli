@@ -99,6 +99,10 @@ func (m Model) headerView() string {
 }
 
 func (m Model) footerView() string {
+	if m.mode == modeInput {
+		return m.styles.footer.UnsetFaint().Render(m.input.View())
+	}
+
 	if m.status != "" {
 		if strings.HasPrefix(m.status, "error:") {
 			return m.styles.errText.Render(m.status)

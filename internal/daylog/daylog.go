@@ -3,6 +3,7 @@ package daylog
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -88,6 +89,25 @@ func (d *DayLog) Append(content string) error {
 	}
 
 	return nil
+}
+
+// FormatEntry normalizes a one-line entry into a markdown list item
+func FormatEntry(msg string) string {
+	msg = strings.TrimSpace(msg)
+	if strings.HasPrefix(msg, "- ") {
+		return msg
+	}
+	return "- " + msg
+}
+
+// EditorCommand creates the log if missing and returns an unstarted
+// editor command with no stdio wired, for callers like tea.ExecProcess
+func (d *DayLog) EditorCommand() (*exec.Cmd, error) {
+	if err := createIfMissing(d); err != nil {
+		return nil, err
+	}
+
+	return editor.Command(d.Path)
 }
 
 // edit the log for the specified date

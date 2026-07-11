@@ -39,7 +39,7 @@ var rootCmd = &cobra.Command{
 
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		if config.Append != "" {
-			return dl.Append(formatMessage(config.Append))
+			return dl.Append(daylog.FormatEntry(config.Append))
 		}
 
 		piped, err := stdinIsPiped()
@@ -80,14 +80,6 @@ func init() {
 	rootCmd.PersistentFlags().Bool("prev", false, "Operate on the most recent log that isn't today's")
 
 	rootCmd.Flags().StringVarP(&config.Append, "append", "a", "", "Append a one-line entry to the log instead of opening an editor")
-}
-
-func formatMessage(msg string) string {
-	msg = strings.TrimSpace(msg)
-	if strings.HasPrefix(msg, "- ") {
-		return msg
-	}
-	return "- " + msg
 }
 
 func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *cobra.Command, args []string) {

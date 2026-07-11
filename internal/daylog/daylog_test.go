@@ -366,3 +366,61 @@ func TestUsePrevious(t *testing.T) {
 		}
 	})
 }
+
+func TestFormatEntry(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain message gets a list marker",
+			input:    "ate a burrito",
+			expected: "- ate a burrito",
+		},
+		{
+			name:     "surrounding whitespace is trimmed",
+			input:    "  ate a burrito  ",
+			expected: "- ate a burrito",
+		},
+		{
+			name:     "existing list marker is preserved",
+			input:    "- ate a burrito",
+			expected: "- ate a burrito",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatEntry(tt.input)
+			if result != tt.expected {
+				t.Errorf("FormatEntry(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEditorCommand(t *testing.T) {
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "vim")
+
+	dl := testDayLog(t)
+
+	cmd, err := dl.EditorCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(cmd.Args) != 2 || cmd.Args[0] != "vim" || cmd.Args[1] != dl.Path {
+		t.Errorf("expected [vim %s], got %v", dl.Path, cmd.Args)
+	}
+	if cmd.Stdin != nil || cmd.Stdout != nil || cmd.Stderr != nil {
+		t.Error("expected no stdio wired so tea.ExecProcess can attach its own")
+	}
+
+	// the log should have been created with its header
+	content := readFile(t, dl.Path)
+	if content != "# 2025/12/02\n\n" {
+		t.Errorf("expected header-only log, got %q", content)
+	}
+}
