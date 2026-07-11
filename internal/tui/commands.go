@@ -12,6 +12,7 @@ import (
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/file"
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 const dayFormat = "2006/01/02"
@@ -24,6 +25,12 @@ type copiedMsg struct{}
 type clearStatusMsg struct{}
 type projectsLoadedMsg struct{ projects []string }
 type projectSwitchedMsg struct{ name, path string }
+
+type todosLoadedMsg struct {
+	day   string
+	todos []todo.Item
+}
+type todoToggledMsg struct{}
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -140,6 +147,37 @@ func switchProject(name string) tea.Cmd {
 			return errMsg{err}
 		}
 		return projectSwitchedMsg{name: name, path: path}
+	}
+}
+
+func loadTodos(projectPath, day string) tea.Cmd {
+	return func() tea.Msg {
+		dl, err := dayLogFor(day, projectPath)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		todos, err := dl.Todos()
+		if err != nil {
+			return errMsg{err}
+		}
+
+		return todosLoadedMsg{day: day, todos: todos}
+	}
+}
+
+func toggleTodo(projectPath, day string, line int) tea.Cmd {
+	return func() tea.Msg {
+		dl, err := dayLogFor(day, projectPath)
+		if err != nil {
+			return errMsg{err}
+		}
+
+		if err := dl.ToggleTodo(line); err != nil {
+			return errMsg{err}
+		}
+
+		return todoToggledMsg{}
 	}
 }
 

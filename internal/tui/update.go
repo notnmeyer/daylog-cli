@@ -56,6 +56,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.days.SetItems(nil)
 		return m, loadDays(m.projectPath, m.today)
 
+	case todosLoadedMsg:
+		if len(msg.todos) == 0 {
+			m.mode = modeBrowse
+			m.status = "no todos for " + msg.day
+			return m, clearStatusAfter(2 * time.Second)
+		}
+
+		// keep the cursor in place across toggle reloads
+		selected := min(m.picker.Index(), len(msg.todos)-1)
+
+		m.todos = msg.todos
+		items := make([]list.Item, len(msg.todos))
+		for i, td := range msg.todos {
+			box := "[ ] "
+			if td.Done {
+				box = "[x] "
+			}
+			items[i] = pickerItem(box + td.Text)
+		}
+		m.picker.SetItems(items)
+		m.picker.Select(selected)
+		m.layout()
+		return m, nil
+
+	case todoToggledMsg:
+		day, ok := m.selectedDay()
+		if !ok {
+			return m, nil
+		}
+		return m, tea.Batch(loadTodos(m.projectPath, day), m.renderSelected())
+
 	case copiedMsg:
 		m.status = "Copied to clipboard."
 		return m, clearStatusAfter(2 * time.Second)
@@ -105,6 +136,8 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onInputKey(msg)
 	case modeProjects:
 		return m.onPickerKey(msg)
+	case modeTodos:
+		return m.onTodoKey(msg)
 	}
 
 	switch {
@@ -134,6 +167,16 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mode = modeProjects
 		m.status = ""
 		return m, loadProjects()
+
+	case key.Matches(msg, m.keys.Todos):
+		day, ok := m.selectedDay()
+		if !ok {
+			return m, nil
+		}
+		m.mode = modeTodos
+		m.status = ""
+		m.picker.SetItems(nil)
+		return m, loadTodos(m.projectPath, day)
 
 	case key.Matches(msg, m.keys.Tab):
 		if m.focus == focusDays {
@@ -184,6 +227,29 @@ func (m Model) onPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, switchProject(string(item))
 
 	case tea.KeyEsc:
+		m.mode = modeBrowse
+		return m, nil
+	}
+
+	var cmd tea.Cmd
+	m.picker, cmd = m.picker.Update(msg)
+	return m, cmd
+}
+
+func (m Model) onTodoKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeySpace:
+		idx := m.picker.Index()
+		if idx < 0 || idx >= len(m.todos) {
+			return m, nil
+		}
+		day, ok := m.selectedDay()
+		if !ok {
+			return m, nil
+		}
+		return m, toggleTodo(m.projectPath, day, m.todos[idx].Line)
+
+	case tea.KeyEnter, tea.KeyEsc:
 		m.mode = modeBrowse
 		return m, nil
 	}

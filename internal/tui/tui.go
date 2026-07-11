@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 type mode int
@@ -17,6 +18,7 @@ const (
 	modeBrowse mode = iota
 	modeInput
 	modeProjects
+	modeTodos
 )
 
 type focusArea int
@@ -39,6 +41,7 @@ type Model struct {
 	vp          viewport.Model
 	input       textinput.Model
 	picker      list.Model
+	todos       []todo.Item
 	md          mdRenderer
 	keys        keyMap
 	help        help.Model

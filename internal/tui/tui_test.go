@@ -468,6 +468,94 @@ func TestPickerEscCancels(t *testing.T) {
 	}
 }
 
+func TestTodoFlow(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "# 2026/07/10\n\n- TODO: buy tortillas\n- [x] TODO: eat a burrito\n")
+
+	m := newTestModel(t, projectPath, today)
+
+	// t opens the todo picker
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = mm.(Model)
+	if m.mode != modeTodos {
+		t.Fatal("expected todos mode after t")
+	}
+
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	mm, _ = m.Update(msgs[0])
+	m = mm.(Model)
+
+	if len(m.todos) != 2 {
+		t.Fatalf("expected 2 todos, got %d", len(m.todos))
+	}
+	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "[ ] TODO: buy tortillas" {
+		t.Errorf("expected unchecked first item, got %q", item)
+	}
+
+	// space toggles the selected todo on disk
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeySpace})
+	m = mm.(Model)
+	msgs = execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	if _, ok := msgs[0].(todoToggledMsg); !ok {
+		t.Fatalf("expected todoToggledMsg, got %T", msgs[0])
+	}
+
+	content := string(readLog(t, projectPath, "2026/07/10"))
+	if !strings.Contains(content, "- [x] TODO: buy tortillas") {
+		t.Errorf("expected todo toggled to done on disk, got %q", content)
+	}
+
+	// the toggle triggers a reload; picker stays open with updated checkbox
+	mm, cmd = m.Update(msgs[0])
+	m = mm.(Model)
+	if m.mode != modeTodos {
+		t.Error("expected todo picker to stay open after toggle")
+	}
+	for _, msg := range execCmd(t, cmd) {
+		mm, _ = m.Update(msg)
+		m = mm.(Model)
+	}
+	if item, _ := m.picker.SelectedItem().(pickerItem); string(item) != "[x] TODO: buy tortillas" {
+		t.Errorf("expected checked first item after reload, got %q", item)
+	}
+
+	// enter confirms/closes, same as esc
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Error("expected enter to close todo picker")
+	}
+	if cmd != nil {
+		t.Error("expected no cmd when closing with enter")
+	}
+}
+
+func TestTodosEmptyDayShowsStatus(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}})
+	m = mm.(Model)
+
+	msgs := execCmd(t, cmd)
+	mm, _ = m.Update(msgs[0])
+	m = mm.(Model)
+
+	if m.mode != modeBrowse {
+		t.Error("expected to fall back to browse when day has no todos")
+	}
+	if !strings.Contains(m.status, "no todos") {
+		t.Errorf("expected no-todos status, got %q", m.status)
+	}
+}
+
 func readLog(t *testing.T, projectPath, day string) []byte {
 	t.Helper()
 

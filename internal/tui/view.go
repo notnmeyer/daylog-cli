@@ -116,8 +116,12 @@ func (m Model) View() string {
 		vpStyle.Render(m.vp.View()),
 	)
 
-	if m.mode == modeProjects {
+	switch m.mode {
+	case modeProjects:
 		body = m.pickerView("switch project", lipgloss.Height(body))
+	case modeTodos:
+		day, _ := m.selectedDay()
+		body = m.pickerView("todos · "+day, lipgloss.Height(body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
@@ -145,6 +149,10 @@ func (m Model) footerView() string {
 
 	if m.mode == modeProjects {
 		return m.styles.footer.Render("enter select • esc cancel")
+	}
+
+	if m.mode == modeTodos {
+		return m.styles.footer.Render("space toggle • enter/esc close")
 	}
 
 	if m.status != "" {

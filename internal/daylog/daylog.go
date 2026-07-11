@@ -13,6 +13,7 @@ import (
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 type DayLog struct {
@@ -111,9 +112,15 @@ func (d *DayLog) Append(content string) error {
 	return nil
 }
 
-// FormatEntry normalizes a one-line entry into a markdown list item
+// FormatEntry normalizes a one-line entry into a markdown list item.
+// entries that read like todos become unchecked checkbox items
 func FormatEntry(msg string) string {
 	msg = strings.TrimSpace(msg)
+
+	if formatted, ok := todo.FormatEntry(msg); ok {
+		return formatted
+	}
+
 	if strings.HasPrefix(msg, "- ") {
 		return msg
 	}
@@ -159,6 +166,33 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
+}
+
+// Todos parses the log's TODO/DONE lines. a missing log has no todos
+func (d *DayLog) Todos() ([]todo.Item, error) {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return todo.Parse(string(content)), nil
+}
+
+// ToggleTodo flips the TODO/DONE prefix on the given 0-based line
+func (d *DayLog) ToggleTodo(line int) error {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		return err
+	}
+
+	updated, err := todo.Toggle(string(content), line)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(d.Path, []byte(updated), 0644)
 }
 
 // usePrevious mutates d.Path to point at the most recent log before now.
@@ -246,7 +280,7 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 	return matches, nil
 }
 
-// carryOverTodos reads the log before `before` and returns any lines starting with "- TODO:".
+// carryOverTodos reads the log before `before` and returns its unfinished todos.
 func carryOverTodos(projectPath string, before time.Time) []string {
 	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), before)
 	if err != nil {
@@ -259,11 +293,5 @@ func carryOverTodos(projectPath string, before time.Time) []string {
 		return nil
 	}
 
-	var todos []string
-	for _, line := range strings.Split(string(content), "\n") {
-		if strings.HasPrefix(line, "- TODO:") {
-			todos = append(todos, line)
-		}
-	}
-	return todos
+	return todo.Unfinished(string(content))
 }

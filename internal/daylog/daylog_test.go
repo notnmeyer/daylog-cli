@@ -121,14 +121,19 @@ func TestCarryOverTodos(t *testing.T) {
 			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- TODO: fix bug\n",
 		},
 		{
-			name:         "only lines starting with - TODO: are copied",
+			name:         "only list items mentioning TODO are copied",
 			prevContent:  "# 2025/12/01\n\n- TODO: write tests\nthinking about TODOs\n  - TODO: indented note\n- did a TODO\n",
-			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n",
+			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- did a TODO\n",
 		},
 		{
 			name:         "no previous log",
 			prevContent:  "",
 			expectedFile: "# 2025/12/02\n\n",
+		},
+		{
+			name:         "checked todos are not carried over",
+			prevContent:  "# 2025/12/01\n\n- [ ] TODO: still open\n- [x] TODO: finished thing\n",
+			expectedFile: "# 2025/12/02\n\n- [ ] TODO: still open\n",
 		},
 	}
 
@@ -388,6 +393,21 @@ func TestFormatEntry(t *testing.T) {
 			input:    "- ate a burrito",
 			expected: "- ate a burrito",
 		},
+		{
+			name:     "todo entry becomes a checkbox",
+			input:    "TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
+		{
+			name:     "todo list item becomes a checkbox",
+			input:    "- TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
+		{
+			name:     "existing checkbox is preserved",
+			input:    "- [ ] TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
 	}
 
 	for _, tt := range tests {
@@ -451,4 +471,55 @@ func TestListProjectsAt(t *testing.T) {
 			t.Fatalf("expected %v, got %v", want, projects)
 		}
 	}
+}
+
+func TestTodosAndToggle(t *testing.T) {
+	dl := testDayLog(t)
+
+	t.Run("missing log has no todos", func(t *testing.T) {
+		todos, err := dl.Todos()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(todos) != 0 {
+			t.Errorf("expected no todos, got %+v", todos)
+		}
+	})
+
+	if err := os.WriteFile(dl.Path, []byte("# 2025/12/02\n\n- TODO: buy tortillas\n- [x] TODO: eat a burrito\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("parses open and checked todos", func(t *testing.T) {
+		todos, err := dl.Todos()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(todos) != 2 {
+			t.Fatalf("expected 2 todos, got %d", len(todos))
+		}
+		if todos[0].Text != "TODO: buy tortillas" || todos[0].Done {
+			t.Errorf("unexpected first todo: %+v", todos[0])
+		}
+		if todos[1].Text != "TODO: eat a burrito" || !todos[1].Done {
+			t.Errorf("unexpected second todo: %+v", todos[1])
+		}
+	})
+
+	t.Run("toggle rewrites the line in place", func(t *testing.T) {
+		if err := dl.ToggleTodo(2); err != nil {
+			t.Fatal(err)
+		}
+		got := readFile(t, dl.Path)
+		want := "# 2025/12/02\n\n- [x] TODO: buy tortillas\n- [x] TODO: eat a burrito\n"
+		if got != want {
+			t.Errorf("file contents =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("toggling a non-todo line errors", func(t *testing.T) {
+		if err := dl.ToggleTodo(0); err == nil {
+			t.Error("expected an error for non-todo line")
+		}
+	})
 }
