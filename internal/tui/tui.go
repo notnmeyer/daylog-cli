@@ -125,7 +125,8 @@ func (m *Model) layout() {
 	m.vp.Width = vpW
 	m.vp.Height = bodyH
 
-	m.input.Width = m.width - len(m.input.Prompt) - 4
+	// clamp every input width: a negative width panics bubbles' textinput
+	m.input.Width = max(1, m.width-len(m.input.Prompt)-4)
 
 	pickerW := max(1, min(60, m.width-12))
 	if m.mode == modeSearch {
@@ -140,8 +141,8 @@ func (m *Model) layout() {
 		pickerH = 1
 	}
 	m.picker.SetSize(pickerW, pickerH)
-	m.dayFilter.Width = pickerW - len(m.dayFilter.Prompt) - 2
-	m.searchInput.Width = pickerW - len(m.searchInput.Prompt) - 2
+	m.dayFilter.Width = max(1, pickerW-len(m.dayFilter.Prompt)-2)
+	m.searchInput.Width = max(1, pickerW-len(m.searchInput.Prompt)-2)
 }
 
 // selectDay points the browse view at day, inserting it into the
