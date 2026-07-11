@@ -42,6 +42,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, loadDays(m.projectPath, m.today)
 
 	case projectsLoadedMsg:
+		// a load that resolves after the user left the picker must not
+		// overwrite whatever modal is now open (the picker is shared)
+		if m.mode != modeProjects {
+			return m, nil
+		}
 		items := make([]list.Item, len(msg.projects))
 		selected := 0
 		for i, p := range msg.projects {
@@ -64,6 +69,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, loadDays(m.projectPath, m.today)
 
 	case todosLoadedMsg:
+		// same guard as the project picker: a stale load carrying empty
+		// values must not leak todo rows into another modal
+		if m.mode != modeTodos {
+			return m, nil
+		}
 		if len(msg.todos) == 0 {
 			m.mode = modeBrowse
 			m.status = "no todos for " + msg.day
