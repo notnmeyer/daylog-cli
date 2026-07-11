@@ -138,8 +138,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case errMsg:
+		// auto-clear like every other status; a stuck error line otherwise
+		// lingers over unrelated actions
 		m.status = "error: " + msg.err.Error()
-		return m, nil
+		return m, clearStatusAfter(5 * time.Second)
 
 	case tea.KeyMsg:
 		return m.onKey(msg)
