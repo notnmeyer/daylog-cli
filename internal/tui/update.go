@@ -358,7 +358,7 @@ func (m Model) onTodoKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !ok {
 			return m, nil
 		}
-		return m, toggleTodo(m.projectPath, day, m.todos[idx].Line)
+		return m, toggleTodo(m.projectPath, day, m.todos[idx])
 
 	case tea.KeyEnter, tea.KeyEsc:
 		m.mode = modeBrowse

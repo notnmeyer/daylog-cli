@@ -50,6 +50,20 @@ func Parse(content string) []Item {
 	return items
 }
 
+// ToggleMatching flips the checkbox on item's line, but only if the
+// line still holds that todo's text. this guards against an edit or
+// append shifting lines between the picker loading and the toggle
+func ToggleMatching(content string, item Item) (string, error) {
+	lines := strings.Split(content, "\n")
+	if item.Line < 0 || item.Line >= len(lines) {
+		return "", fmt.Errorf("todo %q is no longer at line %d", item.Text, item.Line)
+	}
+	if !IsTodo(lines[item.Line]) || !strings.Contains(lines[item.Line], item.Text) {
+		return "", fmt.Errorf("todo %q moved; reopen the list", item.Text)
+	}
+	return Toggle(content, item.Line)
+}
+
 // Toggle flips the checkbox on the given todo line. a todo without a
 // checkbox gains a checked one
 func Toggle(content string, line int) (string, error) {

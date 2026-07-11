@@ -195,6 +195,22 @@ func (d *DayLog) ToggleTodo(line int) error {
 	return os.WriteFile(d.Path, []byte(updated), 0644)
 }
 
+// ToggleTodoItem flips item's checkbox, verifying the line still holds
+// that todo so a stale picker index can't toggle the wrong entry
+func (d *DayLog) ToggleTodoItem(item todo.Item) error {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		return err
+	}
+
+	updated, err := todo.ToggleMatching(string(content), item)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(d.Path, []byte(updated), 0644)
+}
+
 // usePrevious mutates d.Path to point at the most recent log before now.
 func (d *DayLog) UsePrevious(now time.Time) error {
 	prev, err := file.PreviousLog(d.ProjectPath, file.LogProvider{}, now)

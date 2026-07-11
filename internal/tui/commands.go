@@ -172,14 +172,14 @@ func loadTodos(projectPath, day string) tea.Cmd {
 	}
 }
 
-func toggleTodo(projectPath, day string, line int) tea.Cmd {
+func toggleTodo(projectPath, day string, item todo.Item) tea.Cmd {
 	return func() tea.Msg {
 		dl, err := dayLogFor(day, projectPath)
 		if err != nil {
 			return errMsg{err}
 		}
 
-		if err := dl.ToggleTodo(line); err != nil {
+		if err := dl.ToggleTodoItem(item); err != nil {
 			return errMsg{err}
 		}
 

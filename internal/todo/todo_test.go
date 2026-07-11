@@ -158,6 +158,28 @@ func TestToggleRoundTrip(t *testing.T) {
 	}
 }
 
+func TestToggleMatching(t *testing.T) {
+	// text still at its line toggles like a plain Toggle
+	got, err := ToggleMatching(sampleLog, Item{Line: 4, Text: "water plants"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Split(got, "\n")[4] != "- [x] TODO: water plants" {
+		t.Errorf("expected water plants toggled on, got %q", strings.Split(got, "\n")[4])
+	}
+
+	// a line whose content drifted (e.g. an append shifted the file) is
+	// refused rather than toggling the wrong entry
+	if _, err := ToggleMatching(sampleLog, Item{Line: 4, Text: "buy tortillas"}); err == nil {
+		t.Error("expected error when the line no longer holds the item's text")
+	}
+
+	// out-of-range line is refused
+	if _, err := ToggleMatching(sampleLog, Item{Line: 999, Text: "water plants"}); err == nil {
+		t.Error("expected error for an out-of-range line")
+	}
+}
+
 func TestUnfinished(t *testing.T) {
 	got := Unfinished(sampleLog)
 	want := []string{
