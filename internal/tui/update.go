@@ -116,6 +116,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.picker.SetItems(items)
 		m.picker.Select(0)
+		m.layout()
 		return m, nil
 
 	case copiedMsg:

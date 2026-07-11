@@ -326,6 +326,11 @@ func TestSearchFlow(t *testing.T) {
 	if len(m.picker.Items()) != 2 {
 		t.Fatalf("expected 2 picker rows, got %d", len(m.picker.Items()))
 	}
+	// the modal must grow to show every result, not stay at the height
+	// it had when search opened with an empty list
+	if h := m.picker.Height(); h < 2 {
+		t.Errorf("expected picker to expand to fit 2 results, got height %d", h)
+	}
 	// rows match the CLI output format, most recent first
 	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "2026/07/09: - ate a burrito" {
 		t.Errorf("expected CLI-style row, got %q", item.label)
