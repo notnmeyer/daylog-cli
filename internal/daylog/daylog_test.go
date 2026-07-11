@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"testing"
 	"time"
@@ -146,6 +147,66 @@ func TestCarryOverTodos(t *testing.T) {
 			got := readFile(t, dl.Path)
 			if got != tt.expectedFile {
 				t.Errorf("file contents =\n%q\nwant\n%q", got, tt.expectedFile)
+			}
+		})
+	}
+}
+
+func TestSearch(t *testing.T) {
+	project := t.TempDir()
+	writePrevLog(t, project, "2025/12/01", "# 2025/12/01\n\n- ate a burrito\n- wrote tests\n")
+	writePrevLog(t, project, "2025/12/02", "# 2025/12/02\n\n- burrito again\n- reviewed a PR\n")
+
+	tests := []struct {
+		name       string
+		query      string
+		ignoreCase bool
+		expected   []SearchMatch
+	}{
+		{
+			name:  "matches across logs, most recent first",
+			query: "burrito",
+			expected: []SearchMatch{
+				{Date: "2025/12/02", Line: "- burrito again"},
+				{Date: "2025/12/01", Line: "- ate a burrito"},
+			},
+		},
+		{
+			name:  "single match",
+			query: "PR",
+			expected: []SearchMatch{
+				{Date: "2025/12/02", Line: "- reviewed a PR"},
+			},
+		},
+		{
+			name:     "no matches",
+			query:    "taco",
+			expected: nil,
+		},
+		{
+			name:     "match is case-sensitive by default",
+			query:    "Burrito",
+			expected: nil,
+		},
+		{
+			name:       "ignore case matches different casing",
+			query:      "Burrito",
+			ignoreCase: true,
+			expected: []SearchMatch{
+				{Date: "2025/12/02", Line: "- burrito again"},
+				{Date: "2025/12/01", Line: "- ate a burrito"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Search(project, tt.query, tt.ignoreCase)
+			if err != nil {
+				t.Fatalf("Search() error = %v", err)
+			}
+			if !slices.Equal(got, tt.expected) {
+				t.Errorf("Search() = %v, want %v", got, tt.expected)
 			}
 		})
 	}
