@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/fang"
-	"github.com/markusmobius/go-dateparser"
+	"github.com/notnmeyer/daylog-cli/internal/date"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -117,19 +117,10 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 }
 
 func parseDateFromArgs(args []string) (time.Time, error) {
-	cfg := &dateparser.Configuration{
-		DefaultTimezone: time.Local,
-	}
-
 	if len(args) == 0 {
 		return time.Now(), nil
 	}
-
-	d, err := dateparser.Parse(cfg, strings.Join(args, " "))
-	if err != nil {
-		return time.Time{}, err
-	}
-	return d.Time, nil
+	return date.Parse(strings.Join(args, " "), time.Now())
 }
 
 func formatStdinContent(content string) string {
