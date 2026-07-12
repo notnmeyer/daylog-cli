@@ -32,6 +32,17 @@ You can pipe updates as well, `echo "- ate a burrito" | daylog`.
 
 For other commands and options see, `daylog --help`.
 
+### Interactive TUI (experimental)
+
+`daylog tui` opens an interactive terminal UI for browsing and editing your logs. It lands on a ledger of every day, newest first, with a preview of each. From there you can:
+
+- `↑`/`↓` move, `enter` to open a day
+- `a` append a one-line entry, `e` open the day in `$EDITOR`, `y` copy the log
+- `/` filter by date or text (searches log contents), `n` start a new day from a date
+- `t` toggle todos, `p` switch projects, `?` for full help, `q` to quit
+
+Add `-p <project>` to open a specific project.
+
 ### Log storage
 
 Logs are stored in `$XDG_DATA_HOME/daylog`. Use `daylog info` to print the exact directory.

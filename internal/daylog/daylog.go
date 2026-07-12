@@ -3,6 +3,7 @@ package daylog
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/notnmeyer/daylog-cli/internal/editor"
 	"github.com/notnmeyer/daylog-cli/internal/file"
 	"github.com/notnmeyer/daylog-cli/internal/output-formatter"
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 type DayLog struct {
@@ -38,6 +40,26 @@ func ensureProjectPathAt(base, project string) (string, error) {
 		return "", err
 	}
 	return p, nil
+}
+
+func listProjectsAt(base string) ([]string, error) {
+	entries, err := os.ReadDir(filepath.Join(base, "daylog"))
+	if err != nil {
+		return nil, err
+	}
+
+	var projects []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			projects = append(projects, entry.Name())
+		}
+	}
+	return projects, nil
+}
+
+// ListProjects returns the names of all existing projects, sorted
+func ListProjects() ([]string, error) {
+	return listProjectsAt(xdg.DataHome)
 }
 
 func ProjectPath(project string) (string, error) {
@@ -90,6 +112,31 @@ func (d *DayLog) Append(content string) error {
 	return nil
 }
 
+// FormatEntry normalizes a one-line entry into a markdown list item.
+// entries that read like todos become unchecked checkbox items
+func FormatEntry(msg string) string {
+	msg = strings.TrimSpace(msg)
+
+	if formatted, ok := todo.FormatEntry(msg); ok {
+		return formatted
+	}
+
+	if strings.HasPrefix(msg, "- ") {
+		return msg
+	}
+	return "- " + msg
+}
+
+// EditorCommand creates the log if missing and returns an unstarted
+// editor command with no stdio wired, for callers like tea.ExecProcess
+func (d *DayLog) EditorCommand() (*exec.Cmd, error) {
+	if err := createIfMissing(d); err != nil {
+		return nil, err
+	}
+
+	return editor.Command(d.Path)
+}
+
 // edit the log for the specified date
 func (d *DayLog) Edit() error {
 	if err := createIfMissing(d); err != nil {
@@ -119,6 +166,34 @@ func (d *DayLog) Show(format string) (string, error) {
 	}
 
 	return contents, nil
+}
+
+// Todos parses the log's TODO/DONE lines. a missing log has no todos
+func (d *DayLog) Todos() ([]todo.Item, error) {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return todo.Parse(string(content)), nil
+}
+
+// ToggleTodoItem flips item's checkbox, verifying the line still holds
+// that todo so a stale picker index can't toggle the wrong entry
+func (d *DayLog) ToggleTodoItem(item todo.Item) error {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		return err
+	}
+
+	updated, err := todo.ToggleMatching(string(content), item)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(d.Path, []byte(updated), 0644)
 }
 
 // usePrevious mutates d.Path to point at the most recent log before now.
@@ -190,10 +265,15 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 	for _, log := range logs {
 		content, err := os.ReadFile(filepath.Join(projectPath, log, "log.md"))
 		if err != nil {
+			// a log removed between listing and reading shouldn't sink the
+			// whole search; skip it and return what we can
+			if os.IsNotExist(err) {
+				continue
+			}
 			return nil, err
 		}
 
-		for _, line := range strings.Split(string(content), "\n") {
+		for line := range strings.SplitSeq(string(content), "\n") {
 			haystack := line
 			if ignoreCase {
 				haystack = strings.ToLower(line)
@@ -206,7 +286,7 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 	return matches, nil
 }
 
-// carryOverTodos reads the log before `before` and returns any lines starting with "- TODO:".
+// carryOverTodos reads the log before `before` and returns its unfinished todos.
 func carryOverTodos(projectPath string, before time.Time) []string {
 	prev, err := file.PreviousLog(projectPath, file.NewLogProvider(), before)
 	if err != nil {
@@ -219,11 +299,5 @@ func carryOverTodos(projectPath string, before time.Time) []string {
 		return nil
 	}
 
-	var todos []string
-	for _, line := range strings.Split(string(content), "\n") {
-		if strings.HasPrefix(line, "- TODO:") {
-			todos = append(todos, line)
-		}
-	}
-	return todos
+	return todo.Unfinished(string(content))
 }

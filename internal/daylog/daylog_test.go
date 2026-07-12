@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 // writePrevLog creates a log file for the given date under projectPath.
@@ -121,14 +123,19 @@ func TestCarryOverTodos(t *testing.T) {
 			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- TODO: fix bug\n",
 		},
 		{
-			name:         "only lines starting with - TODO: are copied",
+			name:         "only list items mentioning TODO are copied",
 			prevContent:  "# 2025/12/01\n\n- TODO: write tests\nthinking about TODOs\n  - TODO: indented note\n- did a TODO\n",
-			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n",
+			expectedFile: "# 2025/12/02\n\n- TODO: write tests\n- did a TODO\n",
 		},
 		{
 			name:         "no previous log",
 			prevContent:  "",
 			expectedFile: "# 2025/12/02\n\n",
+		},
+		{
+			name:         "checked todos are not carried over",
+			prevContent:  "# 2025/12/01\n\n- [ ] TODO: still open\n- [x] TODO: finished thing\n",
+			expectedFile: "# 2025/12/02\n\n- [ ] TODO: still open\n",
 		},
 	}
 
@@ -363,6 +370,158 @@ func TestUsePrevious(t *testing.T) {
 		want := filepath.Join(project, "2025/12/02/log.md")
 		if dl.Path != want {
 			t.Errorf("dl.Path = %q, want unchanged %q", dl.Path, want)
+		}
+	})
+}
+
+func TestFormatEntry(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "plain message gets a list marker",
+			input:    "ate a burrito",
+			expected: "- ate a burrito",
+		},
+		{
+			name:     "surrounding whitespace is trimmed",
+			input:    "  ate a burrito  ",
+			expected: "- ate a burrito",
+		},
+		{
+			name:     "existing list marker is preserved",
+			input:    "- ate a burrito",
+			expected: "- ate a burrito",
+		},
+		{
+			name:     "todo entry becomes a checkbox",
+			input:    "TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
+		{
+			name:     "todo list item becomes a checkbox",
+			input:    "- TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
+		{
+			name:     "existing checkbox is preserved",
+			input:    "- [ ] TODO: buy milk",
+			expected: "- [ ] TODO: buy milk",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := FormatEntry(tt.input)
+			if result != tt.expected {
+				t.Errorf("FormatEntry(%q) = %q, want %q", tt.input, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEditorCommand(t *testing.T) {
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "vim")
+
+	dl := testDayLog(t)
+
+	cmd, err := dl.EditorCommand()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(cmd.Args) != 2 || cmd.Args[0] != "vim" || cmd.Args[1] != dl.Path {
+		t.Errorf("expected [vim %s], got %v", dl.Path, cmd.Args)
+	}
+	if cmd.Stdin != nil || cmd.Stdout != nil || cmd.Stderr != nil {
+		t.Error("expected no stdio wired so tea.ExecProcess can attach its own")
+	}
+
+	// the log should have been created with its header
+	content := readFile(t, dl.Path)
+	if content != "# 2025/12/02\n\n" {
+		t.Errorf("expected header-only log, got %q", content)
+	}
+}
+
+func TestListProjectsAt(t *testing.T) {
+	base := t.TempDir()
+	for _, project := range []string{"default", "work"} {
+		if err := os.MkdirAll(filepath.Join(base, "daylog", project), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// stray files must be excluded
+	if err := os.WriteFile(filepath.Join(base, "daylog", "notes.txt"), []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	projects, err := listProjectsAt(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"default", "work"}
+	if len(projects) != len(want) {
+		t.Fatalf("expected %v, got %v", want, projects)
+	}
+	for i := range want {
+		if projects[i] != want[i] {
+			t.Fatalf("expected %v, got %v", want, projects)
+		}
+	}
+}
+
+func TestTodosAndToggle(t *testing.T) {
+	dl := testDayLog(t)
+
+	t.Run("missing log has no todos", func(t *testing.T) {
+		todos, err := dl.Todos()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(todos) != 0 {
+			t.Errorf("expected no todos, got %+v", todos)
+		}
+	})
+
+	if err := os.WriteFile(dl.Path, []byte("# 2025/12/02\n\n- TODO: buy tortillas\n- [x] TODO: eat a burrito\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("parses open and checked todos", func(t *testing.T) {
+		todos, err := dl.Todos()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(todos) != 2 {
+			t.Fatalf("expected 2 todos, got %d", len(todos))
+		}
+		if todos[0].Text != "TODO: buy tortillas" || todos[0].Done {
+			t.Errorf("unexpected first todo: %+v", todos[0])
+		}
+		if todos[1].Text != "TODO: eat a burrito" || !todos[1].Done {
+			t.Errorf("unexpected second todo: %+v", todos[1])
+		}
+	})
+
+	t.Run("ToggleTodoItem rewrites the matching line in place", func(t *testing.T) {
+		if err := dl.ToggleTodoItem(todo.Item{Line: 2, Text: "TODO: buy tortillas"}); err != nil {
+			t.Fatal(err)
+		}
+		got := readFile(t, dl.Path)
+		want := "# 2025/12/02\n\n- [x] TODO: buy tortillas\n- [x] TODO: eat a burrito\n"
+		if got != want {
+			t.Errorf("file contents =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("ToggleTodoItem errors when the line no longer holds that todo", func(t *testing.T) {
+		if err := dl.ToggleTodoItem(todo.Item{Line: 0, Text: "TODO: buy tortillas"}); err == nil {
+			t.Error("expected an error for a stale item")
 		}
 	})
 }

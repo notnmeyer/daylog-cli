@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/fang"
-	"github.com/markusmobius/go-dateparser"
+	"github.com/notnmeyer/daylog-cli/internal/date"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +27,9 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "daylog",
 	Short: "A tool for keeping track of what you did today",
-	Long:  "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow",
+	Long: "DayLog: Fighter of the Night Log! A tool for keeping track of what you did today, yesterday, and tomorrow.\n\n" +
+		"Dates accept today/yesterday/tomorrow, a weekday name (its most recent occurrence), " +
+		"relative offsets like \"3 days ago\" or \"in 2 weeks\", and calendar dates like 2023/01/07 or \"Jan 7\".",
 	Example: `
 		daylog
 		daylog -- yesterday
@@ -39,7 +41,7 @@ var rootCmd = &cobra.Command{
 
 	Run: runCommand(func(cmd *cobra.Command, dl *daylog.DayLog) error {
 		if config.Append != "" {
-			return dl.Append(formatMessage(config.Append))
+			return dl.Append(daylog.FormatEntry(config.Append))
 		}
 
 		piped, err := stdinIsPiped()
@@ -82,14 +84,6 @@ func init() {
 	rootCmd.Flags().StringVarP(&config.Append, "append", "a", "", "Append a one-line entry to the log instead of opening an editor")
 }
 
-func formatMessage(msg string) string {
-	msg = strings.TrimSpace(msg)
-	if strings.HasPrefix(msg, "- ") {
-		return msg
-	}
-	return "- " + msg
-}
-
 func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *cobra.Command, args []string) {
 	return func(cmd *cobra.Command, args []string) {
 		projectPath, err := daylog.EnsureProjectPath(config.Project)
@@ -112,7 +106,9 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 			log.Fatal(err)
 		}
 
-		if showPrevious {
+		// the tui browses history via its own day list, so --prev is a
+		// no-op there rather than aborting when no previous log exists
+		if showPrevious && cmd.Name() != "tui" {
 			if err := dl.UsePrevious(time.Now()); err != nil {
 				log.Fatal(err)
 			}
@@ -125,19 +121,10 @@ func runCommand(fn func(cmd *cobra.Command, dl *daylog.DayLog) error) func(cmd *
 }
 
 func parseDateFromArgs(args []string) (time.Time, error) {
-	cfg := &dateparser.Configuration{
-		DefaultTimezone: time.Local,
-	}
-
 	if len(args) == 0 {
 		return time.Now(), nil
 	}
-
-	d, err := dateparser.Parse(cfg, strings.Join(args, " "))
-	if err != nil {
-		return time.Time{}, err
-	}
-	return d.Time, nil
+	return date.Parse(strings.Join(args, " "), time.Now())
 }
 
 func formatStdinContent(content string) string {

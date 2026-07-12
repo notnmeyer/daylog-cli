@@ -44,36 +44,3 @@ func TestFormatStdinContent(t *testing.T) {
 		})
 	}
 }
-
-func TestFormatMessage(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "plain message gets a list marker",
-			input:    "ate a burrito",
-			expected: "- ate a burrito",
-		},
-		{
-			name:     "surrounding whitespace is trimmed",
-			input:    "  ate a burrito  ",
-			expected: "- ate a burrito",
-		},
-		{
-			name:     "existing list marker is preserved",
-			input:    "- ate a burrito",
-			expected: "- ate a burrito",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := formatMessage(tt.input)
-			if result != tt.expected {
-				t.Errorf("formatMessage(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
-		})
-	}
-}
