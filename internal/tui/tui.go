@@ -22,8 +22,10 @@ const (
 	modeInput
 	modeProjects
 	modeTodos
-	modeDays
 	modeSearch
+	// modeLedger is the landing screen: a full-width list of days that is
+	// also the day picker. it replaces the old modeDays modal
+	modeLedger
 )
 
 type Model struct {
@@ -31,7 +33,10 @@ type Model struct {
 	projectPath string
 	today       time.Time
 	mode        mode
-	days        []string // YYYY/MM/DD, newest first
+	inputReturn mode                // mode to return to after the append input closes
+	days        []string            // YYYY/MM/DD, newest first
+	noLogToday  bool                // today has no non-empty log (force-prepended by loadDays)
+	previews    map[string][]string // day -> first few log lines, cached per session
 	dayIdx      int
 	vp          viewport.Model
 	input       textinput.Model
@@ -89,7 +94,9 @@ func New(projectPath, project string, today time.Time) Model {
 		project:     project,
 		projectPath: projectPath,
 		today:       today,
-		mode:        modeBrowse,
+		// land on the ledger: a list of days, not an empty today
+		mode:        modeLedger,
+		previews:    map[string][]string{},
 		vp:          vp,
 		input:       input,
 		picker:      picker,
@@ -122,11 +129,28 @@ func (m *Model) layout() {
 	if vpW < 1 {
 		vpW = 1
 	}
+	// the reading view reserves a thin left strip for the dot spine, so the
+	// viewport (and its markdown wrapping) shrinks by the spine's width
+	if m.showSpine() {
+		vpW = max(1, vpW-spineWidth)
+	}
 	m.vp.Width = vpW
 	m.vp.Height = bodyH
 
 	// clamp every input width: a negative width panics bubbles' textinput
 	m.input.Width = max(1, m.width-len(m.input.Prompt)-4)
+
+	if m.mode == modeLedger {
+		// the ledger IS the body: fill the whole pane. the picker width is the
+		// pane's inner content width, and every ledger row is padded to exactly
+		// that width, so the pane grows to full width naturally (no explicit
+		// lipgloss .Width(), which wraps content off-by-a-few with border+pad)
+		pickerW := max(1, m.width-frameW)
+		pickerH := max(1, bodyH)
+		m.picker.SetSize(pickerW, pickerH)
+		m.dayFilter.Width = max(1, pickerW-len(m.dayFilter.Prompt)-2)
+		return
+	}
 
 	pickerW := max(1, min(60, m.width-12))
 	if m.mode == modeSearch {
@@ -168,11 +192,98 @@ func (m Model) selectedDay() (string, bool) {
 	return m.days[m.dayIdx], true
 }
 
+// openLedger switches to the ledger, clearing any filter and landing the
+// cursor on the current day. shared by launch, d, and esc-from-browse
+func (m *Model) openLedger() tea.Cmd {
+	m.mode = modeLedger
+	m.status = ""
+	m.dayFilter.Reset()
+	m.dayFilter.Blur()
+	return m.refreshLedger()
+}
+
+// refreshLedger rebuilds the ledger rows, keeps the cursor on the current day,
+// and returns a cmd to load previews for the visible days that aren't cached
+// yet. call it whenever the day list changes while the ledger is showing
+func (m *Model) refreshLedger() tea.Cmd {
+	m.rebuildLedgerItems()
+	m.layout()
+	return m.loadVisiblePreviews()
+}
+
+// rebuildLedgerItems repopulates the picker from the current days/previews and
+// restores the cursor onto the selected day (rows include gap dividers, so the
+// picker index and dayIdx differ)
+func (m *Model) rebuildLedgerItems() {
+	query := ""
+	if m.dayFilter.Focused() {
+		query = strings.TrimSpace(m.dayFilter.Value())
+	}
+	items := ledgerItems(m.days, m.today, m.previews, m.noLogToday, query)
+	m.picker.SetItems(items)
+
+	if query != "" {
+		m.picker.Select(0)
+		return
+	}
+	if day, ok := m.selectedDay(); ok {
+		for i, it := range items {
+			// land on the day's anchor line (itemDay), not a continuation
+			if p, ok := it.(pickerItem); ok && p.kind == itemDay && p.value == day {
+				m.picker.Select(i)
+				return
+			}
+		}
+	}
+	m.picker.Select(0)
+}
+
+// loadVisiblePreviews reads first-line previews for the days that have a log
+// but aren't cached yet, bounded to a window near the cursor so this stays
+// O(visible) rather than O(history)
+func (m Model) loadVisiblePreviews() tea.Cmd {
+	const window = 20
+	start := max(0, m.dayIdx-window/2)
+	end := min(len(m.days), start+window)
+
+	var need []string
+	for _, day := range m.days[start:end] {
+		if _, cached := m.previews[day]; cached {
+			continue
+		}
+		if isToday(day, m.today) && m.noLogToday {
+			// only a genuinely-logless today has no file to read; its row shows
+			// the create prompt, not a preview, so skip it. today WITH a log is
+			// read like any other day (once — the cache guard above stops a
+			// re-queue), so its real preview loads instead of a wrong CTA
+			continue
+		}
+		need = append(need, day)
+	}
+	if len(need) == 0 {
+		return nil
+	}
+	return loadPreviews(m.projectPath, need)
+}
+
 // renderSelected re-renders the currently selected day into the viewport
 func (m Model) renderSelected() tea.Cmd {
 	day, ok := m.selectedDay()
 	if !m.ready || !ok {
 		return nil
 	}
-	return renderDay(m.md, m.projectPath, day, m.vp.Width)
+	return renderDay(m.md, m.projectPath, day, m.vp.Width, m.today)
+}
+
+// spineWidth is the fixed width of the reading view's dot spine: a glyph, a
+// space, and a "│" separator ("● │")
+const spineWidth = 3
+
+// spineMinWidth is the narrowest terminal that still gets a spine; below it
+// the reading pane keeps the full width rather than being squeezed
+const spineMinWidth = 40
+
+// showSpine reports whether the reading view should draw the dot spine
+func (m Model) showSpine() bool {
+	return m.mode == modeBrowse && m.width >= spineMinWidth
 }

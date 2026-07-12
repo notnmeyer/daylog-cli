@@ -31,7 +31,7 @@ func defaultKeyMap() keyMap {
 		),
 		JumpDay: key.NewBinding(
 			key.WithKeys("d"),
-			key.WithHelp("d", "jump to day"),
+			key.WithHelp("d/esc", "day list"),
 		),
 		Search: key.NewBinding(
 			key.WithKeys("/"),

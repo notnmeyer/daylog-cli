@@ -61,24 +61,28 @@ func TestLoadDays(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 
 	tests := []struct {
-		name string
-		seed []string
-		want []string
+		name           string
+		seed           []string
+		want           []string
+		wantNoLogToday bool
 	}{
 		{
-			name: "prepends today when its log is missing",
-			seed: []string{"2026/07/08", "2026/07/09"},
-			want: []string{"2026/07/10", "2026/07/09", "2026/07/08"},
+			name:           "prepends today when its log is missing",
+			seed:           []string{"2026/07/08", "2026/07/09"},
+			want:           []string{"2026/07/10", "2026/07/09", "2026/07/08"},
+			wantNoLogToday: true,
 		},
 		{
-			name: "no duplicate when today's log exists",
-			seed: []string{"2026/07/09", "2026/07/10"},
-			want: []string{"2026/07/10", "2026/07/09"},
+			name:           "no duplicate when today's log exists",
+			seed:           []string{"2026/07/09", "2026/07/10"},
+			want:           []string{"2026/07/10", "2026/07/09"},
+			wantNoLogToday: false,
 		},
 		{
-			name: "empty project still shows today",
-			seed: nil,
-			want: []string{"2026/07/10"},
+			name:           "empty project still shows today",
+			seed:           nil,
+			want:           []string{"2026/07/10"},
+			wantNoLogToday: true,
 		},
 	}
 
@@ -97,6 +101,10 @@ func TestLoadDays(t *testing.T) {
 
 			if !slices.Equal(loaded.days, tt.want) {
 				t.Errorf("expected %v, got %v", tt.want, loaded.days)
+			}
+			// the whole ledger empty-today decision pivots on this bit
+			if loaded.noLogToday != tt.wantNoLogToday {
+				t.Errorf("expected noLogToday=%v, got %v", tt.wantNoLogToday, loaded.noLogToday)
 			}
 		})
 	}
@@ -136,19 +144,54 @@ func TestDayLogFor(t *testing.T) {
 }
 
 func TestRenderDayMissingFile(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
 
-	msg := renderDay(newMDRenderer(), projectPath, "2026/07/10", 80)()
+	// today with no file renders the warm "start today's log" invite
+	msg := renderDay(newMDRenderer(), projectPath, "2026/07/10", 80, today)()
 	rendered, ok := msg.(dayRenderedMsg)
 	if !ok {
 		t.Fatalf("expected dayRenderedMsg, got %T", msg)
 	}
-	if !strings.Contains(rendered.content, "no entries yet") {
-		t.Errorf("expected placeholder content, got %q", rendered.content)
+	if !strings.Contains(rendered.content, "Nothing logged") {
+		t.Errorf("expected warm empty content, got %q", rendered.content)
+	}
+	if !strings.Contains(rendered.content, "append") {
+		t.Errorf("expected an append prompt in the invite, got %q", rendered.content)
+	}
+
+	// an older empty day gets the plainer framing, not "for today"
+	msg = renderDay(newMDRenderer(), projectPath, "2026/07/03", 80, today)()
+	rendered, _ = msg.(dayRenderedMsg)
+	if strings.Contains(rendered.content, "for") {
+		t.Errorf("expected older-day framing without \"for today\", got %q", rendered.content)
 	}
 }
 
+// newTestModel builds a ready model landed in browse mode on today. the app
+// launches on the ledger; most tests exercise browse keys, so this opens
+// today (enter on the pinned row) to get there, matching what a user does
 func newTestModel(t *testing.T, projectPath string, today time.Time) Model {
+	t.Helper()
+
+	m := newLedgerModel(t, projectPath, today)
+
+	// enter on the pinned today row opens browse
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Fatalf("expected browse mode after opening today, got %d", m.mode)
+	}
+	if rendered, ok := findDayRendered(t, execCmd(t, cmd)); ok {
+		mm, _ = m.Update(rendered)
+		m = mm.(Model)
+	}
+
+	return m
+}
+
+// newLedgerModel builds a ready model sitting on the ledger (the launch state)
+func newLedgerModel(t *testing.T, projectPath string, today time.Time) Model {
 	t.Helper()
 
 	m := New(projectPath, "default", today)
@@ -156,16 +199,19 @@ func newTestModel(t *testing.T, projectPath string, today time.Time) Model {
 	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = mm.(Model)
 
-	msg := loadDays(projectPath, today)()
-	mm, cmd := m.Update(msg)
-	m = mm.(Model)
-
-	// apply the initial render of the selected day
-	if rendered, ok := findDayRendered(t, execCmd(t, cmd)); ok {
-		mm, _ = m.Update(rendered)
+	// Init loads the days; apply the load and any preview cmds it fires
+	for _, msg := range execCmd(t, loadDays(projectPath, today)) {
+		mm, cmd := m.Update(msg)
 		m = mm.(Model)
+		for _, follow := range execCmd(t, cmd) {
+			mm, _ = m.Update(follow)
+			m = mm.(Model)
+		}
 	}
 
+	if m.mode != modeLedger {
+		t.Fatalf("expected launch on the ledger, got mode %d", m.mode)
+	}
 	return m
 }
 
@@ -211,6 +257,73 @@ func TestDaySteppingRendersDay(t *testing.T) {
 	}
 }
 
+// regression: a render that resolves after the user navigated to another day
+// must NOT paint the old day's content under the new day's header. this was the
+// "header says Jul 06 but content is Jul 09" desync
+func TestStaleRenderDropped(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- day nine content\n")
+	seedLog(t, projectPath, "2026/07/08", "# 2026/07/08\n\n- day eight content\n")
+
+	m := newTestModel(t, projectPath, today) // browse on today (07/10)
+
+	// step to 07/09 and grab its (in-flight) render msg without applying it yet
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model)
+	nineRender, ok := findDayRendered(t, execCmd(t, cmd))
+	if !ok {
+		t.Fatal("expected a render for 07/09")
+	}
+
+	// the user keeps navigating to 07/08 before 07/09's render lands
+	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day != "2026/07/08" {
+		t.Fatalf("expected to be on 07/08, got %s", day)
+	}
+	eightRender, _ := findDayRendered(t, execCmd(t, cmd))
+	mm, _ = m.Update(eightRender)
+	m = mm.(Model)
+
+	// now 07/09's stale render finally arrives — it must be dropped, not painted
+	mm, _ = m.Update(nineRender)
+	m = mm.(Model)
+
+	view := m.vp.View()
+	if strings.Contains(view, "nine") {
+		t.Error("stale 07/09 render painted into the 07/08 viewport")
+	}
+	if !strings.Contains(view, "eight") {
+		t.Error("expected the current day's (07/08) content in the viewport")
+	}
+}
+
+// a render must not paint while the user is on the ledger (no viewport shown)
+func TestRenderDroppedInLedgerMode(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- nine\n")
+
+	m := newTestModel(t, projectPath, today) // browse on today
+	// step to 07/09, capture its render, but go back to the ledger first
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model)
+	nineRender, _ := findDayRendered(t, execCmd(t, cmd))
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // back to ledger
+	m = mm.(Model)
+	if m.mode != modeLedger {
+		t.Fatal("expected ledger after esc")
+	}
+	// the in-flight render lands while on the ledger — must be dropped
+	before := m.vp.View()
+	mm, _ = m.Update(nineRender)
+	m = mm.(Model)
+	if m.vp.View() != before {
+		t.Error("a render painted the viewport while on the ledger")
+	}
+}
+
 func TestSelectDayInsertsMissingDay(t *testing.T) {
 	m := Model{days: []string{"2026/07/10", "2026/07/08", "2026/07/05"}}
 
@@ -232,37 +345,43 @@ func TestSelectDayInsertsMissingDay(t *testing.T) {
 	}
 }
 
-func TestDayPickerFlow(t *testing.T) {
+func TestLedgerFilterAndOpen(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
 	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
 	seedLog(t, projectPath, "2026/06/17", "- june entry\n")
 
-	m := newTestModel(t, projectPath, today)
-
-	// d opens the picker with all days, current day selected
-	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
-	m = mm.(Model)
-	if m.mode != modeDays {
-		t.Fatal("expected days mode after d")
-	}
-	if len(m.picker.Items()) != 3 {
-		t.Fatalf("expected 3 days in picker, got %d", len(m.picker.Items()))
-	}
+	// launch lands on the ledger listing today + the two logged days
+	m := newLedgerModel(t, projectPath, today)
 	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/07/10" {
-		t.Errorf("expected current day pre-selected, got %q", item.value)
+		t.Errorf("expected today pre-selected on the ledger, got %q", item.value)
 	}
 
-	// typing filters fuzzily
+	// / starts the in-place filter; typing narrows fuzzily
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	if !m.dayFilter.Focused() {
+		t.Fatal("expected the filter to be focused after /")
+	}
 	m = typeString(t, m, "jun")
-	if len(m.picker.Items()) != 1 {
-		t.Fatalf("expected 1 match for 'jun', got %d", len(m.picker.Items()))
+
+	// the first row is the "＋ New day…" affordance; the june day matches below it
+	found := false
+	for _, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.value == "2026/06/17" {
+			found = true
+		}
 	}
-	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/06/17" {
-		t.Errorf("expected june day matched, got %q", item.value)
+	if !found {
+		t.Fatal("expected the june day among the filtered rows")
 	}
 
-	// enter jumps to the match and renders it
+	// move past the New day row onto the june match and open it
+	m.moveLedgerCursor(1)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/06/17" {
+		t.Fatalf("expected june day selected, got %q", item.value)
+	}
+
 	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = mm.(Model)
 	if m.mode != modeBrowse {
@@ -382,25 +501,458 @@ func TestSearchEscCancels(t *testing.T) {
 	}
 }
 
-func TestDayPickerEscCancels(t *testing.T) {
+func TestLedgerEscClearsFilterThenStaysHome(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
 	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
 
-	m := newTestModel(t, projectPath, today)
+	m := newLedgerModel(t, projectPath, today)
 
-	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	// start filtering, then esc clears the filter but stays on the ledger
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = mm.(Model)
 	m = typeString(t, m, "07/09")
 
 	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = mm.(Model)
-
-	if m.mode != modeBrowse {
-		t.Error("expected esc to close day picker, not quit")
+	if m.mode != modeLedger {
+		t.Fatal("expected to stay on the ledger after clearing the filter")
 	}
-	if day, _ := m.selectedDay(); day != "2026/07/10" {
-		t.Errorf("expected selection unchanged after cancel, got %s", day)
+	if m.dayFilter.Focused() {
+		t.Error("expected the filter cleared after esc")
+	}
+
+	// a second esc on the unfiltered ledger is inert (doesn't quit)
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+	if m.mode != modeLedger {
+		t.Error("expected esc on the home ledger to be a no-op")
+	}
+	if cmd != nil {
+		if _, ok := cmd().(tea.QuitMsg); ok {
+			t.Error("esc on the ledger must not quit")
+		}
+	}
+}
+
+// esc in browse returns to the ledger with the cursor on the day you were reading
+func TestBrowseEscReturnsToLedger(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
+
+	m := newTestModel(t, projectPath, today) // browse on today
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model) // step to 2026/07/09
+
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(Model)
+	if m.mode != modeLedger {
+		t.Fatal("expected esc to return to the ledger")
+	}
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/07/09" {
+		t.Errorf("expected the ledger cursor on the day just read, got %q", item.value)
+	}
+}
+
+func TestLedgerInitialMode(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	if m.mode != modeLedger {
+		t.Fatal("expected the app to launch on the ledger")
+	}
+	// today is pinned first, then the logged day
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/07/10" {
+		t.Errorf("expected today pinned and selected, got %q", item.value)
+	}
+	// today has no file yet, so its anchor row invites creation
+	item, _ := m.picker.SelectedItem().(pickerItem)
+	if item.row == nil || !strings.Contains(item.row.text, "nothing logged") {
+		t.Errorf("expected today's row to invite logging, got %+v", item.row)
+	}
+	if item.row == nil || item.row.marker != "＋" {
+		t.Errorf("expected the ＋ marker on empty today, got %+v", item.row)
+	}
+}
+
+// ledgerAnchor returns the anchor row for a given day from the picker items
+func ledgerAnchor(t *testing.T, m Model, day string) ledgerRow {
+	t.Helper()
+	for _, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.kind == itemDay && p.value == day {
+			if p.row == nil {
+				t.Fatalf("day %s anchor has no row", day)
+			}
+			return *p.row
+		}
+	}
+	t.Fatalf("no anchor row for %s in the ledger", day)
+	return ledgerRow{}
+}
+
+// regression: today WITH a log must show ● + its real content, never the
+// "nothing logged yet" CTA. this is the exact bug that shipped because only
+// logless-today (＋) was covered
+func TestLedgerTodayWithLogShowsContent(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "# 2026/07/10\n\n- shipped the ledger\n- had a burrito\n")
+	seedLog(t, projectPath, "2026/07/09", "- yesterday entry\n")
+
+	m := newLedgerModel(t, projectPath, today) // drives loadDays -> previews fully
+
+	anchor := ledgerAnchor(t, m, "2026/07/10")
+	if anchor.marker != "●" {
+		t.Errorf("expected ● marker on today-with-a-log, got %q", anchor.marker)
+	}
+	if strings.Contains(anchor.text, "nothing logged") {
+		t.Errorf("today has a log but its anchor shows the CTA: %q", anchor.text)
+	}
+	if anchor.text != "shipped the ledger" {
+		t.Errorf("expected today's first log line, got %q", anchor.text)
+	}
+	if strings.Contains(m.View(), "nothing logged yet") {
+		t.Error("the rendered ledger still shows 'nothing logged yet' for a logged today")
+	}
+}
+
+// regression: on the first paint (after daysLoadedMsg but BEFORE previews
+// load), today-with-a-log must already show ● — never flash the ＋ CTA then swap
+func TestLedgerTodayWithLogNoCtaFlashOnFirstPaint(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "# 2026/07/10\n\n- shipped the ledger\n")
+
+	m := New(projectPath, "default", today)
+	mm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m = mm.(Model)
+
+	// apply ONLY daysLoadedMsg (the first ledger build); do NOT drain the
+	// previews cmd it returns, simulating the pre-previews first paint
+	loaded := loadDays(projectPath, today)()
+	mm, _ = m.Update(loaded)
+	m = mm.(Model)
+
+	anchor := ledgerAnchor(t, m, "2026/07/10")
+	if anchor.marker != "●" {
+		t.Errorf("first paint: expected ● (no CTA flash), got %q", anchor.marker)
+	}
+	if strings.Contains(m.View(), "nothing logged yet") {
+		t.Error("first paint flashed the 'nothing logged yet' CTA for a logged today")
+	}
+	// today-with-a-log counts toward the header even before its preview loads
+	if m.logCount() != 1 {
+		t.Errorf("expected logCount 1 for an uncached logged today, got %d", m.logCount())
+	}
+}
+
+func TestLedgerEnterOpensDay(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
+
+	m := newLedgerModel(t, projectPath, today)
+
+	// move onto the logged day and open it
+	m.moveLedgerCursor(1)
+	if item, _ := m.picker.SelectedItem().(pickerItem); item.value != "2026/07/09" {
+		t.Fatalf("expected the logged day selected, got %q", item.value)
+	}
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after enter")
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/09" {
+		t.Fatalf("expected to open 2026/07/09, got %s", day)
+	}
+	rendered, ok := findDayRendered(t, execCmd(t, cmd))
+	if !ok {
+		t.Fatal("expected a dayRenderedMsg after opening a day")
+	}
+	if !strings.Contains(rendered.content, "burrito") {
+		t.Errorf("expected the day's log rendered, got %q", rendered.content)
+	}
+}
+
+// append from the ledger targets the SELECTED day (not today) and returns to
+// the ledger with that day's block updated
+func TestLedgerAppendFollowsSelection(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/08", "- existing entry\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	// move off today onto the older logged day
+	m.moveLedgerCursor(1) // 2026/07/08 (today has no log, so it's the next anchor)
+	day, _ := m.selectedDay()
+	if day != "2026/07/08" {
+		t.Fatalf("expected 2026/07/08 selected, got %s", day)
+	}
+
+	// a opens the append input, returning to the ledger
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m = mm.(Model)
+	if m.mode != modeInput {
+		t.Fatal("expected input mode after a")
+	}
+	if m.inputReturn != modeLedger {
+		t.Error("expected append to return to the ledger")
+	}
+	m = typeString(t, m, "a new note")
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeLedger {
+		t.Fatal("expected to return to the ledger after append")
+	}
+	// the append must land on the SELECTED day, not today
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected one message, got %d", len(msgs))
+	}
+	if _, ok := msgs[0].(entryAppendedMsg); !ok {
+		t.Fatalf("expected entryAppendedMsg, got %T", msgs[0])
+	}
+	content := string(readLog(t, projectPath, "2026/07/08"))
+	if !strings.Contains(content, "- a new note") {
+		t.Errorf("expected the note appended to the selected day, got %q", content)
+	}
+	// today must NOT have been written
+	if _, err := os.Stat(logPath(projectPath, "2026/07/10")); !os.IsNotExist(err) {
+		t.Error("append should not have created today's log")
+	}
+}
+
+// regression: after appending, navigating back to the ledger must show the new
+// content — the appended day's stale preview must be evicted and re-read
+func TestLedgerReflectsAppendedContent(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/08", "- old first line\n")
+
+	// newLedgerModel drives loadDays + previews, so 07/08's preview is cached
+	m := newLedgerModel(t, projectPath, today)
+	m.moveLedgerCursor(1) // select 2026/07/08
+
+	// append a new line; drive the append cmd and the full reload chain
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m = mm.(Model)
+	m = typeString(t, m, "brand new line")
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	// run entryAppendedMsg -> loadDays -> daysLoadedMsg -> refreshLedger ->
+	// loadVisiblePreviews -> previewsLoadedMsg, applying every follow-up
+	drainAll(t, &m, cmd)
+
+	// the appended day's block must now carry the new line, not just the old one
+	appended := false
+	for _, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.value == "2026/07/08" && p.row != nil {
+			if strings.Contains(p.row.text, "brand new line") {
+				appended = true
+			}
+		}
+	}
+	if !appended {
+		t.Error("the ledger did not reflect the appended line after navigating back")
+	}
+	if got := m.previews["2026/07/08"]; len(got) < 2 {
+		t.Errorf("expected the day's preview re-read with both lines, got %v", got)
+	}
+}
+
+// drainAll recursively applies a cmd and every message/cmd it produces,
+// simulating the tea runtime processing a full reload chain
+func drainAll(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	for _, msg := range execCmd(t, cmd) {
+		if msg == nil {
+			continue
+		}
+		mm, next := m.Update(msg)
+		*m = mm.(Model)
+		if next != nil {
+			drainAll(t, m, next)
+		}
+	}
+}
+
+// edit from the ledger opens $EDITOR on the SELECTED day
+func TestLedgerEditFollowsSelection(t *testing.T) {
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "vim")
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/08", "- existing entry\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	m.moveLedgerCursor(1) // select 2026/07/08
+	if day, _ := m.selectedDay(); day != "2026/07/08" {
+		t.Fatalf("expected 2026/07/08 selected, got %s", day)
+	}
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}})
+	if cmd == nil {
+		t.Fatal("expected an editor cmd for the selected day")
+	}
+	// the editor opens the selected day's existing file (it already exists)
+	content := string(readLog(t, projectPath, "2026/07/08"))
+	if !strings.Contains(content, "existing entry") {
+		t.Errorf("expected the selected day's file, got %q", content)
+	}
+}
+
+func TestLedgerNewDayRow(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+
+	m := newLedgerModel(t, projectPath, today)
+
+	// start a filter and type a date (same grammar the CLI accepts)
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "6/15")
+
+	// the first row is the New day affordance
+	first, _ := m.picker.Items()[0].(pickerItem)
+	if first.kind != itemNewDay {
+		t.Fatalf("expected a New day row at the top while filtering, got %q", first.label)
+	}
+
+	// enter on it resolves the typed date and opens that (empty) day
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after choosing a new day")
+	}
+	if day, _ := m.selectedDay(); day != "2026/06/15" {
+		t.Fatalf("expected to open the new day 2026/06/15, got %s", day)
+	}
+	if !slices.Contains(m.days, "2026/06/15") {
+		t.Error("expected the new day inserted into the day list")
+	}
+}
+
+// the cursor lands only on a day's anchor line, skipping its continuation
+// lines and the blank spacers between blocks; enter on a non-anchor row is inert
+func TestContinuationLinesSkipped(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	// a multi-line log so its block has continuation rows below the anchor
+	seedLog(t, projectPath, "2026/07/09", "- line one\n- line two\n- line three\n")
+	seedLog(t, projectPath, "2026/07/04", "- last week\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	items := m.picker.Items()
+
+	// find a continuation row (part of the 3-line 07/09 block)
+	contIdx := -1
+	for i, it := range items {
+		if p, ok := it.(pickerItem); ok && p.kind == itemCont {
+			contIdx = i
+			break
+		}
+	}
+	if contIdx < 1 {
+		t.Fatal("expected continuation rows under a multi-line day block")
+	}
+
+	// enter while parked on a continuation row is inert
+	m.picker.Select(contIdx)
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(Model)
+	if m.mode != modeLedger {
+		t.Error("expected enter on a continuation row to be a no-op")
+	}
+	if cmd != nil {
+		t.Error("expected no cmd from entering a continuation row")
+	}
+
+	// moving the cursor only ever lands on a day anchor, never a cont/spacer
+	m.picker.Select(0) // today anchor
+	for range items {
+		m.moveLedgerCursor(1)
+		if item, ok := m.picker.SelectedItem().(pickerItem); ok && item.kind != itemDay {
+			t.Fatalf("cursor landed on a non-anchor row: kind=%v", item.kind)
+		}
+	}
+}
+
+func TestPreviewLines(t *testing.T) {
+	dir := t.TempDir()
+
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{name: "skips heading and blanks", content: "# 2026/07/10\n\n- did a thing\n", want: []string{"did a thing"}},
+		{name: "strips list marker", content: "* starred item\n", want: []string{"starred item"}},
+		{name: "plain first lines", content: "just prose\nmore\n", want: []string{"just prose", "more"}},
+		{name: "empty file", content: "", want: nil},
+		{name: "only heading and blanks", content: "# title\n\n\n", want: nil},
+		{name: "checked todo with strikethrough", content: "- [x] TODO: ~~a cheeseburger?~~\n", want: []string{"TODO: a cheeseburger?"}},
+		{name: "skips a bare code fence", content: "```\ncode inside\n```\n", want: []string{"code inside"}},
+		{name: "unwraps bold and inline code", content: "- **bold** and `code`\n", want: []string{"bold and code"}},
+		{name: "unwraps a link", content: "- [go get a burrito](http://x) now\n", want: []string{"go get a burrito now"}},
+		{
+			name:    "caps at five lines then an ellipsis",
+			content: "- l1\n- l2\n- l3\n- l4\n- l5\n- l6\n- l7\n",
+			want:    []string{"l1", "l2", "l3", "l4", "l5", "…"},
+		},
+		{
+			name:    "exactly five lines has no ellipsis",
+			content: "- l1\n- l2\n- l3\n- l4\n- l5\n",
+			want:    []string{"l1", "l2", "l3", "l4", "l5"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, tt.name+".md")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+			got, err := previewLines(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(got, tt.want) {
+				t.Errorf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+
+	// a missing file is an error the caller skips over
+	if _, err := previewLines(filepath.Join(dir, "nope.md")); err == nil {
+		t.Error("expected an error for a missing file")
+	}
+}
+
+func TestLoadPreviews(t *testing.T) {
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- ate a burrito\n- and a taco\n")
+	seedLog(t, projectPath, "2026/07/08", "planned the week\n")
+
+	msg := loadPreviews(projectPath, []string{"2026/07/09", "2026/07/08", "2026/07/07"})()
+	loaded, ok := msg.(previewsLoadedMsg)
+	if !ok {
+		t.Fatalf("expected previewsLoadedMsg, got %T", msg)
+	}
+	if !slices.Equal(loaded.previews["2026/07/09"], []string{"ate a burrito", "and a taco"}) {
+		t.Errorf("expected two-line preview, got %q", loaded.previews["2026/07/09"])
+	}
+	if !slices.Equal(loaded.previews["2026/07/08"], []string{"planned the week"}) {
+		t.Errorf("expected week preview, got %q", loaded.previews["2026/07/08"])
+	}
+	// a day with no file simply has no preview (not an error)
+	if _, present := loaded.previews["2026/07/07"]; present {
+		t.Error("expected no preview entry for a missing day")
 	}
 }
 
@@ -429,7 +981,7 @@ func TestQuitKeys(t *testing.T) {
 		})
 	}
 
-	// esc cancels modals, so in browse it must not quit the session
+	// esc returns to the ledger from browse, so it must not quit the session
 	m := newTestModel(t, t.TempDir(), today)
 	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEsc}); cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
@@ -581,6 +1133,22 @@ func TestCopiedStatusSetsAndClears(t *testing.T) {
 	m = mm.(Model)
 	if m.status != "" {
 		t.Errorf("expected status cleared, got %q", m.status)
+	}
+}
+
+// switching projects must clear the date-keyed preview cache so today (or any
+// day) can't render the previous project's content
+func TestProjectSwitchClearsPreviewCache(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newTestModel(t, t.TempDir(), today)
+	m.previews["2026/07/10"] = []string{"project A content"}
+
+	newPath := t.TempDir()
+	mm, _ := m.Update(projectSwitchedMsg{name: "b", path: newPath})
+	m = mm.(Model)
+
+	if len(m.previews) != 0 {
+		t.Errorf("expected the preview cache cleared on project switch, got %v", m.previews)
 	}
 }
 
@@ -766,6 +1334,119 @@ func readLog(t *testing.T, projectPath, day string) []byte {
 	return b
 }
 
+// anchorRow returns the anchor ledgerRow of a day's block for assertions
+func anchorRow(t *testing.T, day string, today time.Time, preview []string) ledgerRow {
+	t.Helper()
+	// noLogToday=true so an empty today still gets its ＋ CTA; non-today days
+	// ignore it (the CTA branch requires isToday)
+	block := dayBlock(day, today, preview, true)
+	if len(block) == 0 {
+		t.Fatalf("empty block for %s", day)
+	}
+	p, ok := block[0].(pickerItem)
+	if !ok || p.row == nil || p.kind != itemDay {
+		t.Fatalf("first block item isn't a day anchor: %+v", block[0])
+	}
+	return *p.row
+}
+
+func TestLedgerRowColumns(t *testing.T) {
+	today := time.Date(2026, 7, 11, 12, 0, 0, 0, time.Local)
+
+	tests := []struct {
+		name        string
+		day         string
+		preview     []string
+		wantMarker  string
+		wantDate    string
+		wantWeekday string
+		wantText    string
+		wantAccent  bool
+	}{
+		{name: "this-year day", day: "2026/06/17", preview: []string{"total 48"}, wantMarker: "●", wantDate: "Jun 17", wantWeekday: "Wed", wantText: "total 48"},
+		{name: "cross-year shows full year", day: "2025/08/09", preview: []string{"burrito"}, wantMarker: "●", wantDate: "Aug 09 2025", wantWeekday: "Sat", wantText: "burrito"},
+		{name: "today reads as the word today", day: "2026/07/11", preview: []string{"shipped it"}, wantMarker: "●", wantDate: "today", wantWeekday: "Sat", wantText: "shipped it"},
+		{name: "yesterday reads as the word yesterday", day: "2026/07/10", preview: []string{"did a thing"}, wantMarker: "●", wantDate: "yesterday", wantWeekday: "Fri", wantText: "did a thing"},
+		{name: "empty today invites", day: "2026/07/11", preview: nil, wantMarker: "＋", wantDate: "today", wantWeekday: "Sat", wantText: "nothing logged yet · a append · e edit", wantAccent: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := anchorRow(t, tt.day, today, tt.preview)
+			if r.marker != tt.wantMarker {
+				t.Errorf("marker: want %q got %q", tt.wantMarker, r.marker)
+			}
+			if r.date != tt.wantDate {
+				t.Errorf("date: want %q got %q", tt.wantDate, r.date)
+			}
+			if r.weekday != tt.wantWeekday {
+				t.Errorf("weekday: want %q got %q", tt.wantWeekday, r.weekday)
+			}
+			if r.text != tt.wantText {
+				t.Errorf("text: want %q got %q", tt.wantText, r.text)
+			}
+			if r.accent != tt.wantAccent {
+				t.Errorf("accent: want %v got %v", tt.wantAccent, r.accent)
+			}
+			if !r.anchor {
+				t.Error("expected the first block row to be an anchor")
+			}
+		})
+	}
+}
+
+// a multi-line log block has one anchor line (with the date rail) plus a
+// continuation line per further log line; the "…" caps an over-long log
+func TestDayBlockMultiLine(t *testing.T) {
+	today := time.Date(2026, 7, 11, 12, 0, 0, 0, time.Local)
+	block := dayBlock("2026/06/17", today, []string{"line one", "line two", "…"}, false)
+	if len(block) != 3 {
+		t.Fatalf("expected 3 rows in the block, got %d", len(block))
+	}
+	first, _ := block[0].(pickerItem)
+	if first.kind != itemDay || !first.row.anchor || first.row.date != "Jun 17" {
+		t.Errorf("first row should be the dated anchor, got %+v", first.row)
+	}
+	for i, it := range block[1:] {
+		p, _ := it.(pickerItem)
+		if p.kind != itemCont {
+			t.Errorf("continuation row %d should be itemCont, got %v", i, p.kind)
+		}
+		if p.selectable() {
+			t.Errorf("continuation row %d should not be selectable", i)
+		}
+		if p.row.anchor || p.row.marker != "" || p.row.date != "" {
+			t.Errorf("continuation row %d should have a blank rail, got %+v", i, p.row)
+		}
+	}
+	// the "…" continuation renders faint
+	if last, _ := block[2].(pickerItem); !last.row.faint {
+		t.Error("the … overflow line should be faint")
+	}
+}
+
+// every rendered ledger row must be exactly the picker width, so the │ rule
+// aligns down the whole list and the pane fills without wrapping
+func TestLedgerRowsAlign(t *testing.T) {
+	today := time.Date(2026, 7, 11, 12, 0, 0, 0, time.Local)
+	d := pickerDelegate{styles: defaultStyles()}
+	// anchor rows (double-width marker, cross-year date) and a continuation row
+	rows := []ledgerRow{
+		anchorRow(t, "2026/07/11", today, nil),                   // ＋ today
+		anchorRow(t, "2026/06/17", today, []string{"total 48"}),  // this-year
+		anchorRow(t, "2025/08/09", today, []string{"a burrito"}), // cross-year
+		{text: "a continuation line"},                            // blank-rail continuation
+	}
+	const width = 90
+	for i, r := range rows {
+		for _, selected := range []bool{false, true} {
+			line := d.renderLedgerRow(r, width, selected)
+			if w := lipgloss.Width(line); w != width {
+				t.Errorf("row %d selected=%v: width %d, want %d", i, selected, w, width)
+			}
+		}
+	}
+}
+
 func TestDayLabel(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 
@@ -780,7 +1461,7 @@ func TestDayLabel(t *testing.T) {
 		{name: "within a week", day: "2026/07/07", wantPrimary: "Jul 07", wantSecondary: "3 days ago"},
 		{name: "six days ago", day: "2026/07/04", wantPrimary: "Jul 04", wantSecondary: "6 days ago"},
 		{name: "a week ago", day: "2026/07/03", wantPrimary: "Jul 03", wantSecondary: "2026/07/03"},
-		{name: "other year", day: "2025/12/31", wantPrimary: "Dec 31", wantSecondary: "2025/12/31"},
+		{name: "other year", day: "2025/12/31", wantPrimary: "Dec 31 2025", wantSecondary: "2025/12/31"},
 		{name: "unparseable", day: "garbage", wantPrimary: "garbage", wantSecondary: ""},
 	}
 
@@ -905,7 +1586,7 @@ func TestLayoutRobustAtExtremes(t *testing.T) {
 	for _, s := range [][2]int{{0, 0}, {1, 1}, {2, 2}, {80, 3}} {
 		mm, _ := m.Update(tea.WindowSizeMsg{Width: s[0], Height: s[1]})
 		m = mm.(Model)
-		for _, mode := range []mode{modeBrowse, modeInput, modeSearch, modeDays, modeProjects, modeTodos} {
+		for _, mode := range []mode{modeBrowse, modeInput, modeSearch, modeLedger, modeProjects, modeTodos} {
 			m.mode = mode
 			_ = m.View()
 		}

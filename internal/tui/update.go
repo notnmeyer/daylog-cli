@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"maps"
 	"slices"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/notnmeyer/daylog-cli/internal/date"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -21,24 +24,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case daysLoadedMsg:
 		prev, _ := m.selectedDay()
 		m.days = msg.days
+		m.noLogToday = msg.noLogToday
 		m.dayIdx = 0
 		if idx := slices.Index(m.days, prev); idx >= 0 {
 			m.dayIdx = idx
 		}
+		if m.mode == modeLedger {
+			return m, m.refreshLedger()
+		}
 		return m, m.renderSelected()
 
+	case previewsLoadedMsg:
+		maps.Copy(m.previews, msg.previews)
+		if m.mode == modeLedger {
+			// re-render rows now that previews are in; keep the cursor put
+			m.rebuildLedgerItems()
+		}
+		return m, nil
+
 	case dayRenderedMsg:
+		// drop a stale render: if the user navigated to another day (or into
+		// the ledger) before this resolved, painting it would show the wrong
+		// day's content under the current header
+		if day, ok := m.selectedDay(); !ok || day != msg.day || m.mode == modeLedger {
+			return m, nil
+		}
 		m.vp.SetContent(msg.content)
 		m.vp.GotoTop()
 		return m, nil
 
 	case entryAppendedMsg:
+		// the day's preview is now stale; evict it so the reload re-reads it
+		delete(m.previews, msg.day)
 		return m, loadDays(m.projectPath, m.today)
 
 	case editorFinishedMsg:
 		if msg.err != nil {
 			m.status = "error: " + msg.err.Error()
 		}
+		// the edited day's preview may have changed; evict so it re-reads
+		delete(m.previews, msg.day)
 		return m, loadDays(m.projectPath, m.today)
 
 	case projectsLoadedMsg:
@@ -66,6 +91,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.mode = modeBrowse
 		// drop the old project's selection so the reload lands on today
 		m.days = nil
+		// previews are keyed by date, which collides across projects — clear
+		// them so today (or any day) can't render another project's content
+		m.previews = map[string][]string{}
 		return m, loadDays(m.projectPath, m.today)
 
 	case todosLoadedMsg:
@@ -153,7 +181,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.mode == modeDays {
+	if m.mode == modeLedger && m.dayFilter.Focused() {
 		var cmd tea.Cmd
 		m.dayFilter, cmd = m.dayFilter.Update(msg)
 		return m, cmd
@@ -176,8 +204,8 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onPickerKey(msg)
 	case modeTodos:
 		return m.onTodoKey(msg)
-	case modeDays:
-		return m.onDayPickerKey(msg)
+	case modeLedger:
+		return m.onLedgerKey(msg)
 	case modeSearch:
 		return m.onSearchKey(msg)
 	}
@@ -187,6 +215,7 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case key.Matches(msg, m.keys.Append):
+		m.inputReturn = modeBrowse
 		m.mode = modeInput
 		m.status = ""
 		return m, m.input.Focus()
@@ -234,14 +263,10 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case key.Matches(msg, m.keys.JumpDay):
-		m.mode = modeDays
-		m.status = ""
-		m.dayFilter.Reset()
-		m.picker.SetItems(dayPickerItems(m.days, m.today, ""))
-		m.picker.Select(m.dayIdx)
-		m.layout()
-		return m, m.dayFilter.Focus()
+	case key.Matches(msg, m.keys.JumpDay), msg.Type == tea.KeyEsc:
+		// d and esc both return to the ledger (the day list); d preserves the
+		// old "jump to day" muscle memory now that the ledger is that list
+		return m, m.openLedger()
 
 	case key.Matches(msg, m.keys.Search):
 		m.mode = modeSearch
@@ -270,38 +295,156 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) onDayPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	filtering := m.dayFilter.Focused()
+
 	switch msg.Type {
 	case tea.KeyEnter:
-		item, ok := m.picker.SelectedItem().(pickerItem)
-		m.mode = modeBrowse
-		m.dayFilter.Blur()
-		if !ok {
-			return m, nil
-		}
-		m.selectDay(item.value)
-		return m, m.renderSelected()
+		return m.openLedgerRow()
 
 	case tea.KeyEsc:
-		m.mode = modeBrowse
-		m.dayFilter.Blur()
+		if filtering {
+			// clear the filter back to the full ledger, staying home
+			return m, m.openLedger()
+		}
 		return m, nil
 
 	case tea.KeyUp, tea.KeyCtrlP:
-		m.picker.CursorUp()
+		m.moveLedgerCursor(-1)
 		return m, nil
 
 	case tea.KeyDown, tea.KeyCtrlN:
-		m.picker.CursorDown()
+		m.moveLedgerCursor(1)
 		return m, nil
 	}
 
+	// unfiltered browse keys (once filtering, letters feed the filter instead)
+	if !filtering {
+		switch {
+		case key.Matches(msg, m.keys.Quit):
+			return m, tea.Quit
+
+		case key.Matches(msg, m.keys.Append):
+			// append to the selected day; the cursor already tracks it via
+			// moveLedgerCursor keeping dayIdx in sync. return to the ledger
+			if _, ok := m.selectedDay(); !ok {
+				return m, nil
+			}
+			m.inputReturn = modeLedger
+			m.mode = modeInput
+			m.status = ""
+			return m, m.input.Focus()
+
+		case key.Matches(msg, m.keys.Edit):
+			// open the selected day in $EDITOR; on finish the reload refreshes
+			// the ledger in place
+			day, ok := m.selectedDay()
+			if !ok {
+				return m, nil
+			}
+			return m, openEditor(m.projectPath, day)
+
+		case key.Matches(msg, m.keys.Older):
+			m.moveLedgerCursor(1) // older = further down the newest-first list
+			return m, nil
+
+		case key.Matches(msg, m.keys.Newer):
+			m.moveLedgerCursor(-1)
+			return m, nil
+
+		case key.Matches(msg, m.keys.Projects):
+			m.mode = modeProjects
+			m.status = ""
+			return m, loadProjects()
+
+		case key.Matches(msg, m.keys.Help):
+			m.help.ShowAll = !m.help.ShowAll
+			m.layout()
+			return m, nil
+
+		case msg.String() == "n" || key.Matches(msg, m.keys.Search):
+			// both start the filter/new-day prompt in place
+			m.status = ""
+			m.dayFilter.Reset()
+			m.rebuildLedgerItems()
+			m.layout()
+			return m, m.dayFilter.Focus()
+		}
+		// any other key in the unfiltered ledger is inert (j/k handled above)
+		return m, nil
+	}
+
+	// filtering: feed the key to the filter input and re-rank live
 	var cmd tea.Cmd
 	m.dayFilter, cmd = m.dayFilter.Update(msg)
-	m.picker.SetItems(dayPickerItems(m.days, m.today, strings.TrimSpace(m.dayFilter.Value())))
-	m.picker.Select(0)
+	m.rebuildLedgerItems()
 	m.layout()
 	return m, cmd
+}
+
+// openLedgerRow acts on the highlighted ledger row: open a day, resolve a typed
+// date on the "＋ New day…" row, or ignore a gap divider
+func (m Model) openLedgerRow() (tea.Model, tea.Cmd) {
+	item, ok := m.picker.SelectedItem().(pickerItem)
+	if !ok || !item.selectable() {
+		return m, nil // gap divider or empty list
+	}
+
+	if item.kind == itemNewDay {
+		day, err := m.resolveNewDay()
+		if err != nil {
+			m.status = "error: " + err.Error()
+			return m, clearStatusAfter(3 * time.Second)
+		}
+		m.dayFilter.Blur()
+		m.mode = modeBrowse
+		m.selectDay(day)
+		return m, m.renderSelected()
+	}
+
+	m.dayFilter.Blur()
+	m.mode = modeBrowse
+	m.selectDay(item.value)
+	return m, m.renderSelected()
+}
+
+// moveLedgerCursor moves the picker cursor by dir (±1), skipping gap dividers,
+// and keeps dayIdx in sync so the header/spine track the highlighted day
+func (m *Model) moveLedgerCursor(dir int) {
+	items := m.picker.Items()
+	if len(items) == 0 {
+		return
+	}
+	i := m.picker.Index()
+	for {
+		i += dir
+		if i < 0 || i >= len(items) {
+			return // ran off an end; leave the cursor put
+		}
+		if p, ok := items[i].(pickerItem); ok && p.selectable() {
+			m.picker.Select(i)
+			if p.kind == itemDay {
+				if idx := slices.Index(m.days, p.value); idx >= 0 {
+					m.dayIdx = idx
+				}
+			}
+			return
+		}
+	}
+}
+
+// resolveNewDay parses the current filter text as a date reference and returns
+// its YYYY/MM/DD form so a not-yet-logged day can be opened for backfill
+func (m Model) resolveNewDay() (string, error) {
+	text := strings.TrimSpace(m.dayFilter.Value())
+	if text == "" {
+		return "", fmt.Errorf("type a date first")
+	}
+	t, err := date.Parse(text, m.today)
+	if err != nil {
+		return "", fmt.Errorf("couldn't read %q as a date", text)
+	}
+	return t.Format(dayFormat), nil
 }
 
 func (m Model) onSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -385,7 +528,7 @@ func (m Model) onInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		text := strings.TrimSpace(m.input.Value())
 		m.input.Reset()
 		m.input.Blur()
-		m.mode = modeBrowse
+		m.mode = m.inputReturn // back to wherever append was opened from
 
 		if text == "" {
 			return m, nil
@@ -400,7 +543,7 @@ func (m Model) onInputKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		m.input.Reset()
 		m.input.Blur()
-		m.mode = modeBrowse
+		m.mode = m.inputReturn
 		return m, nil
 	}
 
