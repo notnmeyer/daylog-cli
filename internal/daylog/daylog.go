@@ -180,21 +180,6 @@ func (d *DayLog) Todos() ([]todo.Item, error) {
 	return todo.Parse(string(content)), nil
 }
 
-// ToggleTodo flips the TODO/DONE prefix on the given 0-based line
-func (d *DayLog) ToggleTodo(line int) error {
-	content, err := os.ReadFile(d.Path)
-	if err != nil {
-		return err
-	}
-
-	updated, err := todo.Toggle(string(content), line)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(d.Path, []byte(updated), 0644)
-}
-
 // ToggleTodoItem flips item's checkbox, verifying the line still holds
 // that todo so a stale picker index can't toggle the wrong entry
 func (d *DayLog) ToggleTodoItem(item todo.Item) error {
@@ -288,7 +273,7 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 			return nil, err
 		}
 
-		for _, line := range strings.Split(string(content), "\n") {
+		for line := range strings.SplitSeq(string(content), "\n") {
 			haystack := line
 			if ignoreCase {
 				haystack = strings.ToLower(line)

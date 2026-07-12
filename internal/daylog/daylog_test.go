@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/notnmeyer/daylog-cli/internal/todo"
 )
 
 // writePrevLog creates a log file for the given date under projectPath.
@@ -506,8 +508,8 @@ func TestTodosAndToggle(t *testing.T) {
 		}
 	})
 
-	t.Run("toggle rewrites the line in place", func(t *testing.T) {
-		if err := dl.ToggleTodo(2); err != nil {
+	t.Run("ToggleTodoItem rewrites the matching line in place", func(t *testing.T) {
+		if err := dl.ToggleTodoItem(todo.Item{Line: 2, Text: "TODO: buy tortillas"}); err != nil {
 			t.Fatal(err)
 		}
 		got := readFile(t, dl.Path)
@@ -517,9 +519,9 @@ func TestTodosAndToggle(t *testing.T) {
 		}
 	})
 
-	t.Run("toggling a non-todo line errors", func(t *testing.T) {
-		if err := dl.ToggleTodo(0); err == nil {
-			t.Error("expected an error for non-todo line")
+	t.Run("ToggleTodoItem errors when the line no longer holds that todo", func(t *testing.T) {
+		if err := dl.ToggleTodoItem(todo.Item{Line: 0, Text: "TODO: buy tortillas"}); err == nil {
+			t.Error("expected an error for a stale item")
 		}
 	})
 }

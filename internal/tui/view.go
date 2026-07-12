@@ -71,7 +71,6 @@ func padRight(s string, w int) string {
 	return s
 }
 
-
 type pickerDelegate struct {
 	styles styles
 }
@@ -383,10 +382,10 @@ func (m Model) View() string {
 
 	switch m.mode {
 	case modeProjects:
-		body = m.modalView("projects", "", "", lipgloss.Height(body))
+		body = m.modalView("projects", lipgloss.Height(body))
 	case modeTodos:
 		day, _ := m.selectedDay()
-		body = m.modalView("todos · "+day, "", "", lipgloss.Height(body))
+		body = m.modalView("todos · "+day, lipgloss.Height(body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
@@ -464,21 +463,9 @@ func (m Model) headerView() string {
 }
 
 // modalView renders every picker as one centered modal in place of the
-// body: a title, an optional live-filter input, then the list. passing an
-// empty input omits the input row so static pickers hug their title.
-// empty is the lowercase placeholder shown in place of bubbles' default
-// "No items." when the list is empty
-func (m Model) modalView(title, input, empty string, height int) string {
-	rows := []string{m.styles.modalTitle.Render(title)}
-	if input != "" {
-		rows = append(rows, input, "")
-	}
-	if len(m.picker.Items()) == 0 && empty != "" {
-		rows = append(rows, m.styles.normal.Render("  "+empty))
-	} else {
-		rows = append(rows, m.picker.View())
-	}
-
+// body: a title, then the list
+func (m Model) modalView(title string, height int) string {
+	rows := []string{m.styles.modalTitle.Render(title), m.picker.View()}
 	box := m.styles.modal.Render(lipgloss.JoinVertical(lipgloss.Left, rows...))
 	return lipgloss.Place(m.width, height, lipgloss.Center, lipgloss.Center, box)
 }
