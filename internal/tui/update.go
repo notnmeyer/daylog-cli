@@ -133,27 +133,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(loadTodos(m.projectPath, day), m.renderSelected())
 
 	case searchDebounceMsg:
-		// only the latest keystroke's debounce runs the search
-		if m.mode != modeSearch || msg.seq != m.searchSeq {
+		// only the latest keystroke's debounce runs the content search, and
+		// only while the ledger filter is active
+		if m.mode != modeLedger || !m.dayFilter.Focused() || msg.seq != m.filterSeq {
 			return m, nil
 		}
-		query := strings.TrimSpace(m.searchInput.Value())
+		query := strings.TrimSpace(m.dayFilter.Value())
 		if query == "" {
-			m.picker.SetItems(nil)
-			return m, nil
+			return m, nil // empty query: date-fuzzy path already shows the full ledger
 		}
 		return m, runSearch(m.projectPath, query)
 
 	case searchResultsMsg:
-		if m.mode != modeSearch || msg.query != strings.TrimSpace(m.searchInput.Value()) {
+		// drop a stale result: left the filter, or the query moved on since
+		// this search launched
+		if m.mode != modeLedger || !m.dayFilter.Focused() || msg.query != strings.TrimSpace(m.dayFilter.Value()) {
 			return m, nil
 		}
-		items := make([]list.Item, len(msg.matches))
-		for i, match := range msg.matches {
-			items[i] = pickerItem{label: match.Date + ": " + match.Line, value: match.Date}
+		// keep the FIRST matching line per day (cleaned), shown as that day's
+		// filtered-row preview so you see why it matched
+		set := make(map[string]string, len(msg.matches))
+		for _, match := range msg.matches {
+			if _, seen := set[match.Date]; !seen {
+				set[match.Date] = cleanPreview(match.Line)
+			}
 		}
-		m.picker.SetItems(items)
-		m.picker.Select(0)
+		m.contentMatches = set
+		m.contentQuery = msg.query
+		// re-render unioning date-fuzzy (instant) with the content matches that
+		// just arrived; preserve the cursor rather than yanking it to the top
+		prev, _ := m.selectedDay()
+		m.rebuildLedgerItems()
+		m.restoreLedgerCursor(prev)
 		m.layout()
 		return m, nil
 
@@ -187,12 +198,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.mode == modeSearch {
-		var cmd tea.Cmd
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		return m, cmd
-	}
-
 	return m, nil
 }
 
@@ -206,8 +211,6 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onTodoKey(msg)
 	case modeLedger:
 		return m.onLedgerKey(msg)
-	case modeSearch:
-		return m.onSearchKey(msg)
 	}
 
 	switch {
@@ -265,16 +268,9 @@ func (m Model) onKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case key.Matches(msg, m.keys.JumpDay), msg.Type == tea.KeyEsc:
 		// d and esc both return to the ledger (the day list); d preserves the
-		// old "jump to day" muscle memory now that the ledger is that list
+		// old "jump to day" muscle memory now that the ledger is that list.
+		// search lives on the ledger filter now, not here
 		return m, m.openLedger()
-
-	case key.Matches(msg, m.keys.Search):
-		m.mode = modeSearch
-		m.status = ""
-		m.searchInput.Reset()
-		m.picker.SetItems(nil)
-		m.layout()
-		return m, m.searchInput.Focus()
 
 	case key.Matches(msg, m.keys.Help):
 		m.help.ShowAll = !m.help.ShowAll
@@ -366,6 +362,8 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			// both start the filter/new-day prompt in place
 			m.status = ""
 			m.dayFilter.Reset()
+			m.contentMatches = nil
+			m.contentQuery = ""
 			m.rebuildLedgerItems()
 			m.layout()
 			return m, m.dayFilter.Focus()
@@ -374,12 +372,33 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// filtering: feed the key to the filter input and re-rank live
+	// filtering: feed the key to the filter input, re-rank the date-fuzzy
+	// matches instantly, and debounce a full content search. dropping the old
+	// query's content matches immediately keeps the ledger from showing stale
+	// hits until the new search resolves
 	var cmd tea.Cmd
 	m.dayFilter, cmd = m.dayFilter.Update(msg)
+	m.contentMatches = nil
+	m.contentQuery = ""
+	m.filterSeq++
 	m.rebuildLedgerItems()
 	m.layout()
-	return m, cmd
+	return m, tea.Batch(cmd, debounceSearch(m.filterSeq))
+}
+
+// restoreLedgerCursor puts the picker cursor back on the anchor row of day
+// after a rebuild, so an async content result doesn't yank the cursor to the
+// top when the user navigated onto a match during the debounce
+func (m *Model) restoreLedgerCursor(day string) {
+	if day == "" {
+		return
+	}
+	for i, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.kind == itemDay && p.value == day {
+			m.picker.Select(i)
+			return
+		}
+	}
 }
 
 // openLedgerRow acts on the highlighted ledger row: open a day, resolve a typed
@@ -445,38 +464,6 @@ func (m Model) resolveNewDay() (string, error) {
 		return "", fmt.Errorf("couldn't read %q as a date", text)
 	}
 	return t.Format(dayFormat), nil
-}
-
-func (m Model) onSearchKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.Type {
-	case tea.KeyEnter:
-		item, ok := m.picker.SelectedItem().(pickerItem)
-		m.mode = modeBrowse
-		m.searchInput.Blur()
-		if !ok {
-			return m, nil
-		}
-		m.selectDay(item.value)
-		return m, m.renderSelected()
-
-	case tea.KeyEsc:
-		m.mode = modeBrowse
-		m.searchInput.Blur()
-		return m, nil
-
-	case tea.KeyUp, tea.KeyCtrlP:
-		m.picker.CursorUp()
-		return m, nil
-
-	case tea.KeyDown, tea.KeyCtrlN:
-		m.picker.CursorDown()
-		return m, nil
-	}
-
-	var cmd tea.Cmd
-	m.searchInput, cmd = m.searchInput.Update(msg)
-	m.searchSeq++
-	return m, tea.Batch(cmd, debounceSearch(m.searchSeq))
 }
 
 func (m Model) onPickerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

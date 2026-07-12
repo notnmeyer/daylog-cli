@@ -10,8 +10,6 @@ type styles struct {
 	selected   lipgloss.Style
 	normal     lipgloss.Style
 	gap        lipgloss.Style
-	spine      lipgloss.Style
-	spineOn    lipgloss.Style
 	footer     lipgloss.Style
 	errText    lipgloss.Style
 }
@@ -25,10 +23,6 @@ func defaultStyles() styles {
 		selected:   lipgloss.NewStyle().Foreground(lipgloss.Color("170")).Bold(true),
 		normal:     lipgloss.NewStyle(),
 		gap:        lipgloss.NewStyle().Faint(true),
-		// the spine's ● has-log markers echo the picker accent; empty days
-		// and the separator stay faint so the current-day highlight reads
-		spine:      lipgloss.NewStyle().Faint(true),
-		spineOn:    lipgloss.NewStyle().Foreground(lipgloss.Color("170")),
 		footer:     lipgloss.NewStyle().Faint(true).Padding(0, 1),
 		errText:    lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Padding(0, 1),
 	}

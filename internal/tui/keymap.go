@@ -33,9 +33,11 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("d"),
 			key.WithHelp("d/esc", "day list"),
 		),
+		// "/" opens the ledger filter (which searches dates AND log content);
+		// it no longer exists in the reading view
 		Search: key.NewBinding(
 			key.WithKeys("/"),
-			key.WithHelp("/", "search"),
+			key.WithHelp("/", "filter"),
 		),
 		Scroll: key.NewBinding(
 			key.WithKeys("j", "k", "up", "down"),
@@ -84,13 +86,15 @@ func defaultKeyMap() keyMap {
 
 // ShortHelp leads with help and quit so the two most important discovery
 // hints survive when the footer truncates on a narrow terminal
+// help is shown in the reading view, which no longer has search/filter (that
+// lives on the ledger), so k.Search is omitted here
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit, k.Older, k.Newer, k.JumpDay, k.Search, k.Append, k.Edit, k.Copy, k.Todos}
+	return []key.Binding{k.Help, k.Quit, k.Older, k.Newer, k.JumpDay, k.Append, k.Edit, k.Copy, k.Todos}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Older, k.Newer, k.JumpDay, k.Search},
+		{k.Older, k.Newer, k.JumpDay},
 		{k.Append, k.Edit, k.Copy},
 		{k.Todos, k.Projects},
 		{k.Scroll, k.Top, k.Bottom},

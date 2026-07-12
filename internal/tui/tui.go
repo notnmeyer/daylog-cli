@@ -22,7 +22,6 @@ const (
 	modeInput
 	modeProjects
 	modeTodos
-	modeSearch
 	// modeLedger is the landing screen: a full-width list of days that is
 	// also the day picker. it replaces the old modeDays modal
 	modeLedger
@@ -42,17 +41,22 @@ type Model struct {
 	input       textinput.Model
 	picker      list.Model
 	dayFilter   textinput.Model
-	searchInput textinput.Model
-	searchSeq   int
-	todos       []todo.Item
-	md          mdRenderer
-	keys        keyMap
-	help        help.Model
-	styles      styles
-	status      string
-	width       int
-	height      int
-	ready       bool
+	// ledger content search: day -> the first log line matching the current
+	// filter query (shown as the filtered row's preview so you see WHY it
+	// matched), plus the query it was computed for (so a stale set can't leak
+	// into a rebuild). filterSeq drops superseded debounces
+	contentMatches map[string]string
+	contentQuery   string
+	filterSeq      int
+	todos          []todo.Item
+	md             mdRenderer
+	keys           keyMap
+	help           help.Model
+	styles         styles
+	status         string
+	width          int
+	height         int
+	ready          bool
 }
 
 func Run(dl *daylog.DayLog, project string) error {
@@ -70,11 +74,7 @@ func New(projectPath, project string, today time.Time) Model {
 
 	dayFilter := textinput.New()
 	dayFilter.Prompt = "filter › "
-	dayFilter.Placeholder = "type to filter"
-
-	searchInput := textinput.New()
-	searchInput.Prompt = "search › "
-	searchInput.Placeholder = "search all logs"
+	dayFilter.Placeholder = "date or text"
 
 	// shared by the day, project, and todo pickers
 	picker := list.New(nil, pickerDelegate{styles: st}, 0, 0)
@@ -101,7 +101,6 @@ func New(projectPath, project string, today time.Time) Model {
 		input:       input,
 		picker:      picker,
 		dayFilter:   dayFilter,
-		searchInput: searchInput,
 		md:          newMDRenderer(),
 		keys:        defaultKeyMap(),
 		help:        help.New(),
@@ -129,11 +128,6 @@ func (m *Model) layout() {
 	if vpW < 1 {
 		vpW = 1
 	}
-	// the reading view reserves a thin left strip for the dot spine, so the
-	// viewport (and its markdown wrapping) shrinks by the spine's width
-	if m.showSpine() {
-		vpW = max(1, vpW-spineWidth)
-	}
 	m.vp.Width = vpW
 	m.vp.Height = bodyH
 
@@ -153,10 +147,6 @@ func (m *Model) layout() {
 	}
 
 	pickerW := max(1, min(60, m.width-12))
-	if m.mode == modeSearch {
-		// search rows carry whole log lines; give them more room
-		pickerW = max(1, min(90, m.width-12))
-	}
 	// every picker shrinks to fit its items, capped so a long list
 	// still leaves room for the modal frame, title, input, and gaps
 	pickerH := min(15, bodyH-8)
@@ -166,7 +156,6 @@ func (m *Model) layout() {
 	}
 	m.picker.SetSize(pickerW, pickerH)
 	m.dayFilter.Width = max(1, pickerW-len(m.dayFilter.Prompt)-2)
-	m.searchInput.Width = max(1, pickerW-len(m.searchInput.Prompt)-2)
 }
 
 // selectDay points the browse view at day, inserting it into the
@@ -199,6 +188,8 @@ func (m *Model) openLedger() tea.Cmd {
 	m.status = ""
 	m.dayFilter.Reset()
 	m.dayFilter.Blur()
+	m.contentMatches = nil
+	m.contentQuery = ""
 	return m.refreshLedger()
 }
 
@@ -216,10 +207,17 @@ func (m *Model) refreshLedger() tea.Cmd {
 // picker index and dayIdx differ)
 func (m *Model) rebuildLedgerItems() {
 	query := ""
+	var content map[string]string
 	if m.dayFilter.Focused() {
 		query = strings.TrimSpace(m.dayFilter.Value())
+		// only union the content-match set when it was computed for THIS exact
+		// query — a rebuild triggered by an unrelated event (e.g. a preview
+		// arriving mid-filter) must never surface a stale set
+		if query != "" && query == m.contentQuery {
+			content = m.contentMatches
+		}
 	}
-	items := ledgerItems(m.days, m.today, m.previews, m.noLogToday, query)
+	items := ledgerItems(m.days, m.today, m.previews, m.noLogToday, query, content)
 	m.picker.SetItems(items)
 
 	if query != "" {
@@ -273,17 +271,4 @@ func (m Model) renderSelected() tea.Cmd {
 		return nil
 	}
 	return renderDay(m.md, m.projectPath, day, m.vp.Width, m.today)
-}
-
-// spineWidth is the fixed width of the reading view's dot spine: a glyph, a
-// space, and a "│" separator ("● │")
-const spineWidth = 3
-
-// spineMinWidth is the narrowest terminal that still gets a spine; below it
-// the reading pane keeps the full width rather than being squeezed
-const spineMinWidth = 40
-
-// showSpine reports whether the reading view should draw the dot spine
-func (m Model) showSpine() bool {
-	return m.mode == modeBrowse && m.width >= spineMinWidth
 }

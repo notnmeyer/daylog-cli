@@ -202,7 +202,7 @@ func (d pickerDelegate) renderLedgerRow(r ledgerRow, width int, selected bool) s
 // blank spacer separates blocks so days breathe. when filtering, a "＋ New
 // day…" affordance leads and blocks collapse to their anchor line so more days
 // fit; matching is fuzzy over date + label
-func ledgerItems(days []string, today time.Time, previews map[string][]string, noLogToday bool, query string) []list.Item {
+func ledgerItems(days []string, today time.Time, previews map[string][]string, noLogToday bool, query string, contentMatches map[string]string) []list.Item {
 	targets := make([]string, len(days))
 	for i, day := range days {
 		primary, secondary := dayLabel(day, today)
@@ -210,17 +210,34 @@ func ledgerItems(days []string, today time.Time, previews map[string][]string, n
 	}
 
 	if query != "" {
-		matches := fuzzy.Find(query, targets)
-		items := make([]list.Item, 0, len(matches)+1)
+		// a day appears if its DATE LABEL fuzzy-matches OR its LOG CONTENT
+		// contains the query (contentMatches, from the debounced daylog.Search)
+		dateHit := make(map[int]bool)
+		for _, match := range fuzzy.Find(query, targets) {
+			dateHit[match.Index] = true
+		}
+
+		items := make([]list.Item, 0, len(days)+1)
 		items = append(items, pickerItem{
 			label: "＋ New day…   type a date to start (e.g. \"jun 15\", \"6/15\", \"yesterday\")",
 			kind:  itemNewDay,
 		})
-		for _, match := range matches {
-			day := days[match.Index]
-			// filtered rows collapse to just the anchor line so the matches
-			// stay scannable
-			items = append(items, dayBlock(day, today, previews[day], noLogToday)[0])
+		// walk days in their canonical newest-first order so the union is
+		// ordered and deduped by construction (each day emitted at most once,
+		// even when it matches by both date and content)
+		for i, day := range days {
+			matchLine, isContent := contentMatches[day]
+			if !dateHit[i] && !isContent {
+				continue
+			}
+			// filtered rows collapse to just the anchor line to stay scannable.
+			// a content match shows the LINE that matched (so you see why),
+			// instead of the day's generic first-line preview
+			preview := previews[day]
+			if isContent && matchLine != "" {
+				preview = []string{matchLine}
+			}
+			items = append(items, dayBlock(day, today, preview, noLogToday)[0])
 		}
 		return items
 	}
@@ -361,7 +378,7 @@ func (m Model) View() string {
 	if m.mode == modeLedger {
 		body = m.ledgerView()
 	} else {
-		body = m.styles.pane.Render(m.spinedViewport())
+		body = m.styles.pane.Render(m.vp.View())
 	}
 
 	switch m.mode {
@@ -370,55 +387,11 @@ func (m Model) View() string {
 	case modeTodos:
 		day, _ := m.selectedDay()
 		body = m.modalView("todos · "+day, "", "", lipgloss.Height(body))
-	case modeSearch:
-		body = m.modalView("search", m.searchInput.View(), m.searchEmpty(), lipgloss.Height(body))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
 }
 
-// spinedViewport renders the reading viewport with the dot spine down its left
-// edge (when the terminal is wide enough); otherwise the viewport alone
-func (m Model) spinedViewport() string {
-	if !m.showSpine() {
-		return m.vp.View()
-	}
-	return lipgloss.JoinHorizontal(lipgloss.Top, m.spineView(), m.vp.View())
-}
-
-// spineAnchor is how many rows down the current day sits in the spine, so the
-// highlighted dot lands near where reading starts (top of the pane) with newer
-// days just above and older days flowing down below
-const spineAnchor = 1
-
-// spineView draws one "● │" / "○ │" row per viewport line, marking days that
-// have a log and highlighting the current day, so you keep a sense of where
-// you are in history while reading. it is passive — h/l already move the
-// highlight, so it needs no keys or focus
-func (m Model) spineView() string {
-	rows := make([]string, m.vp.Height)
-	for i := range rows {
-		glyph := " "
-		style := m.styles.spine
-		// row spineAnchor is the current day; earlier rows are newer days,
-		// later rows are older ones (the day list is newest-first)
-		idx := m.dayIdx - spineAnchor + i
-		if idx >= 0 && idx < len(m.days) {
-			if m.hasLog(m.days[idx]) {
-				glyph = "●"
-			} else {
-				glyph = "○"
-			}
-			if idx == m.dayIdx {
-				style = m.styles.spineOn.Bold(true)
-			} else if glyph == "●" {
-				style = m.styles.spineOn
-			}
-		}
-		rows[i] = style.Render(glyph) + m.styles.spine.Render(" │ ")
-	}
-	return lipgloss.JoinVertical(lipgloss.Left, rows...)
-}
 
 // hasLog reports whether a day has a non-empty log. today is force-prepended
 // into m.days even when empty, so membership alone isn't enough — a day has a
@@ -451,15 +424,6 @@ func (m Model) ledgerView() string {
 	return m.styles.pane.Render(view)
 }
 
-// searchEmpty distinguishes the pre-search prompt from a query that
-// found nothing
-func (m Model) searchEmpty() string {
-	if strings.TrimSpace(m.searchInput.Value()) == "" {
-		return "type to search all logs"
-	}
-	return fmt.Sprintf("no matches for %q", strings.TrimSpace(m.searchInput.Value()))
-}
-
 func (m Model) headerView() string {
 	header := "daylog · " + m.project
 
@@ -488,6 +452,13 @@ func (m Model) headerView() string {
 		if secondary != "" && secondary != day {
 			header += " · " + secondary
 		}
+	}
+	// a faint "N of M" position chip, so you keep a sense of where you are in
+	// history now that the dot spine is gone. "1 of M" is the newest day, which
+	// matches the "N days ago" phrasing beside it. gated on a min width so a
+	// narrow terminal keeps the date/age and drops only the chip
+	if _, ok := m.selectedDay(); ok && len(m.days) > 1 && m.width >= 50 {
+		header += fmt.Sprintf(" · %d of %d", m.dayIdx+1, len(m.days))
 	}
 	return m.styles.fit(m.styles.header, m.width).Render(header)
 }
@@ -534,11 +505,9 @@ func (m Model) footerView() string {
 		return footer.Render("↑/↓ move • enter select • esc cancel")
 	case modeTodos:
 		return footer.Render("space toggle • enter done • esc cancel")
-	case modeSearch:
-		return footer.Render("type to search • ↑/↓ move • enter select • esc cancel")
 	case modeLedger:
 		if m.dayFilter.Focused() {
-			return footer.Render("type to filter • ↑/↓ move • enter open • esc clear")
+			return footer.Render("filter by date or text • ↑/↓ move • enter open • esc clear")
 		}
 		return footer.Render("↑/↓ move • enter open • a append • n new day • / filter • p project • ? help")
 	}

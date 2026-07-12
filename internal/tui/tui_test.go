@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/notnmeyer/daylog-cli/internal/daylog"
@@ -257,6 +256,61 @@ func TestDaySteppingRendersDay(t *testing.T) {
 	}
 }
 
+// the browse header shows a "N of M" position chip (replacing the cut spine);
+// "1 of M" is the newest day, and it drops on a narrow terminal
+func TestBrowseHeaderPositionChip(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- nine\n")
+	seedLog(t, projectPath, "2026/07/08", "- eight\n")
+
+	m := newTestModel(t, projectPath, today) // browse on today (newest), width 80
+	if h := stripANSI(m.headerView()); !strings.Contains(h, "1 of 3") {
+		t.Errorf("expected '1 of 3' for the newest day, got %q", h)
+	}
+
+	// step to the oldest day
+	m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}})
+	m = mm.(Model)
+	if day, _ := m.selectedDay(); day == "2026/07/08" {
+		if h := stripANSI(m.headerView()); !strings.Contains(h, "3 of 3") {
+			t.Errorf("expected '3 of 3' on the oldest day, got %q", h)
+		}
+	}
+
+	// a narrow terminal drops the chip but keeps the date
+	mm, _ = m.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
+	m = mm.(Model)
+	h := stripANSI(m.headerView())
+	if strings.Contains(h, " of ") {
+		t.Errorf("expected the chip dropped on a narrow terminal, got %q", h)
+	}
+	if !strings.Contains(h, "daylog") {
+		t.Errorf("expected the header still present when narrow, got %q", h)
+	}
+}
+
+// stripANSI removes SGR escapes for header assertions
+func stripANSI(s string) string {
+	var b strings.Builder
+	esc := false
+	for _, r := range s {
+		if r == 0x1b {
+			esc = true
+			continue
+		}
+		if esc {
+			if r == 'm' {
+				esc = false
+			}
+			continue
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 // regression: a render that resolves after the user navigated to another day
 // must NOT paint the old day's content under the new day's header. this was the
 // "header says Jul 06 but content is Jul 09" desync
@@ -400,104 +454,214 @@ func TestLedgerFilterAndOpen(t *testing.T) {
 	}
 }
 
-func TestSearchFlow(t *testing.T) {
-	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+// filterDays returns the day values of the current filtered ledger rows
+// (skipping the ＋ New day… affordance)
+func filterDays(m Model) []string {
+	var days []string
+	for _, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.kind == itemDay {
+			days = append(days, p.value)
+		}
+	}
+	return days
+}
+
+// runFilterSearch drives the debounce+search after typing, applying the
+// resulting searchResultsMsg, and returns the model
+func runFilterSearch(t *testing.T, m Model) Model {
+	t.Helper()
+	// fire the latest debounce, which returns a runSearch cmd
+	mm, cmd := m.Update(searchDebounceMsg{seq: m.filterSeq})
+	m = mm.(Model)
+	for _, msg := range execCmd(t, cmd) {
+		if msg == nil {
+			continue
+		}
+		mm, _ = m.Update(msg)
+		m = mm.(Model)
+	}
+	return m
+}
+
+// THE regression: typing content ("burrito") must surface days whose LOGS
+// contain it — even when the match is NOT in the shown preview lines — and must
+// NOT appear on the instant date-fuzzy pass alone. this is the exact bug.
+func TestLedgerFilterMatchesContent(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
-	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
-	seedLog(t, projectPath, "2026/06/17", "- burrito planning\n- unrelated\n")
+	// a day whose burrito line is on line 6 — BEYOND the 5-line preview window
+	seedLog(t, projectPath, "2026/07/10",
+		"# 2026/07/10\n\n- one\n- two\n- three\n- four\n- five\n- got a burrito finally\n")
+	// a day that does NOT mention burrito at all
+	seedLog(t, projectPath, "2026/06/17", "# 2026/06/17\n\n- shipped the parser\n")
 
-	m := newTestModel(t, projectPath, today)
+	m := newLedgerModel(t, projectPath, today)
 
-	// / opens search mode with an empty picker
+	// open the filter and type content
 	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = mm.(Model)
-	if m.mode != modeSearch {
-		t.Fatal("expected search mode after /")
-	}
-	if len(m.picker.Items()) != 0 {
-		t.Fatal("expected empty picker before typing")
-	}
-
 	m = typeString(t, m, "burrito")
 
-	// a stale debounce (older keystroke) is ignored
-	_, cmd := m.Update(searchDebounceMsg{seq: m.searchSeq - 1})
-	if cmd != nil {
-		t.Error("expected stale debounce to be ignored")
+	// INSTANT pass (date-fuzzy only): "burrito" matches no date label, so the
+	// day is absent — this is exactly the reported failure before the fix
+	if got := filterDays(m); len(got) != 0 {
+		t.Errorf("date-fuzzy alone should not match 'burrito', got %v", got)
 	}
 
-	// the latest debounce runs the search
-	mm, cmd = m.Update(searchDebounceMsg{seq: m.searchSeq})
-	m = mm.(Model)
-	if cmd == nil {
-		t.Fatal("expected a search cmd from the latest debounce")
+	// after the debounced content search resolves, the burrito day appears...
+	m = runFilterSearch(t, m)
+	if _, ok := m.contentMatches["2026/07/10"]; !ok {
+		t.Error("expected the content search to match 2026/07/10")
 	}
-	msgs := execCmd(t, cmd)
-	if len(msgs) != 1 {
-		t.Fatalf("expected one message, got %d", len(msgs))
+	// ...and the row shows the LINE that matched (so you see why), even though
+	// the burrito line is beyond the day's normal 5-line preview window
+	if line := m.contentMatches["2026/07/10"]; !strings.Contains(line, "burrito") {
+		t.Errorf("expected the matched line stored for the row, got %q", line)
 	}
-	results, ok := msgs[0].(searchResultsMsg)
-	if !ok {
-		t.Fatalf("expected searchResultsMsg, got %T", msgs[0])
+	got := filterDays(m)
+	if len(got) != 1 || got[0] != "2026/07/10" {
+		t.Fatalf("expected only the burrito day, got %v", got)
 	}
-	if len(results.matches) != 2 {
-		t.Fatalf("expected 2 matches, got %d", len(results.matches))
+	// ...and the non-matching day stays out (the filter actually filters)
+	for _, d := range got {
+		if d == "2026/06/17" {
+			t.Error("a non-matching day leaked into the content filter")
+		}
 	}
-
-	mm, _ = m.Update(results)
-	m = mm.(Model)
-	if len(m.picker.Items()) != 2 {
-		t.Fatalf("expected 2 picker rows, got %d", len(m.picker.Items()))
+	// the ＋ New day… affordance is still row 0
+	if first, _ := m.picker.Items()[0].(pickerItem); first.kind != itemNewDay {
+		t.Error("expected the New day row at the top of a filtered ledger")
 	}
-	// the modal must grow to show every result, not stay at the height
-	// it had when search opened with an empty list
-	if h := m.picker.Height(); h < 2 {
-		t.Errorf("expected picker to expand to fit 2 results, got height %d", h)
-	}
-	// rows match the CLI output format, most recent first
-	if item, _ := m.picker.SelectedItem().(pickerItem); item.label != "2026/07/09: - ate a burrito" {
-		t.Errorf("expected CLI-style row, got %q", item.label)
-	}
-
-	// down + enter opens the older match's log
-	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m = mm.(Model)
-	mm, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = mm.(Model)
-	if m.mode != modeBrowse {
-		t.Fatal("expected browse mode after enter")
-	}
-	if day, _ := m.selectedDay(); day != "2026/06/17" {
-		t.Fatalf("expected jump to 2026/06/17, got %s", day)
-	}
-	rendered, ok := findDayRendered(t, execCmd(t, cmd))
-	if !ok {
-		t.Fatal("expected a dayRenderedMsg after opening a result")
-	}
-	if !strings.Contains(rendered.content, "planning") {
-		t.Errorf("expected matched log rendered, got %q", rendered.content)
+	// the matched row shows the matching LINE, not a bare "·" tick — even
+	// though that line is beyond the day's normal preview window
+	anchor := ledgerAnchor(t, m, "2026/07/10")
+	if !strings.Contains(anchor.text, "burrito") {
+		t.Errorf("expected the filtered row to show the matching line, got %q", anchor.text)
 	}
 }
 
-func TestSearchEscCancels(t *testing.T) {
-	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+// the filter unions DATE matches with CONTENT matches, deduped, newest-first
+func TestLedgerFilterUnionsDateAndContent(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
-	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
+	// content match only (mentions the word, date label doesn't)
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- ate a burrito\n")
+	// a plain day used to prove non-matches are excluded
+	seedLog(t, projectPath, "2026/06/17", "# 2026/06/17\n\n- unrelated work\n")
 
-	m := newTestModel(t, projectPath, today)
+	m := newLedgerModel(t, projectPath, today)
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "burrito")
+	m = runFilterSearch(t, m)
 
+	got := filterDays(m)
+	if len(got) != 1 || got[0] != "2026/07/09" {
+		t.Fatalf("expected the burrito day only, got %v", got)
+	}
+
+	// now filter by a DATE — instant, no content needed
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // clear
+	m = mm.(Model)
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "jun")
+	got = filterDays(m)
+	found := false
+	for _, d := range got {
+		if d == "2026/06/17" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected the June day to match the date filter 'jun', got %v", got)
+	}
+}
+
+// a content result for an OLD query (the user kept typing) is dropped
+func TestLedgerFilterDropsStaleResult(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- ate a burrito\n")
+
+	m := newLedgerModel(t, projectPath, today)
 	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = mm.(Model)
 	m = typeString(t, m, "burrito")
 
+	// a result for a DIFFERENT (old) query must be ignored
+	mm, _ = m.Update(searchResultsMsg{query: "burr", matches: []daylog.SearchMatch{{Date: "2026/07/09", Line: "- x"}}})
+	m = mm.(Model)
+	if _, ok := m.contentMatches["2026/07/09"]; ok {
+		t.Error("a stale-query result was accepted into contentMatches")
+	}
+	// and a stale debounce (older seq) fires no search
+	if _, cmd := m.Update(searchDebounceMsg{seq: m.filterSeq - 1}); cmd != nil {
+		t.Error("a superseded debounce should not run a search")
+	}
+}
+
+// clearing the filter (esc) drops the content matches and shows the full ledger
+func TestLedgerFilterEscClearsContent(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- ate a burrito\n")
+	seedLog(t, projectPath, "2026/06/17", "# 2026/06/17\n\n- other\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "burrito")
+	m = runFilterSearch(t, m)
+	if len(m.contentMatches) == 0 {
+		t.Fatal("precondition: expected content matches before clearing")
+	}
+
 	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = mm.(Model)
-
-	if m.mode != modeBrowse {
-		t.Error("expected esc to close search, not quit")
+	if m.mode != modeLedger || m.dayFilter.Focused() {
+		t.Error("expected esc to clear the filter and stay on the ledger")
 	}
-	if day, _ := m.selectedDay(); day != "2026/07/10" {
-		t.Errorf("expected selection unchanged after cancel, got %s", day)
+	if len(m.contentMatches) != 0 || m.contentQuery != "" {
+		t.Error("expected content matches cleared after esc")
+	}
+	// a late result arriving now (filter closed) must be ignored, not applied
+	mm, _ = m.Update(searchResultsMsg{query: "burrito", matches: []daylog.SearchMatch{{Date: "2026/07/09", Line: "x"}}})
+	m = mm.(Model)
+	if len(m.contentMatches) != 0 {
+		t.Error("a result arriving after the filter closed was applied")
+	}
+}
+
+// an async content result must not yank the cursor off a day the user
+// navigated onto during the debounce
+func TestLedgerFilterResultPreservesCursor(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	// two days that both date-match "jul" so navigation has somewhere to go
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- burrito\n")
+	seedLog(t, projectPath, "2026/07/08", "# 2026/07/08\n\n- burrito\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	m = typeString(t, m, "burrito")
+	m = runFilterSearch(t, m)
+
+	// move the cursor onto a specific match
+	m.moveLedgerCursor(1)
+	want, _ := m.selectedDay()
+	if want == "" {
+		t.Fatal("expected a selected day after moving the cursor")
+	}
+
+	// a fresh (same-query) result rebuild must keep the cursor on that day
+	mm, _ = m.Update(searchResultsMsg{query: "burrito", matches: []daylog.SearchMatch{
+		{Date: "2026/07/09", Line: "burrito"}, {Date: "2026/07/08", Line: "burrito"},
+	}})
+	m = mm.(Model)
+	if got, _ := m.selectedDay(); got != want {
+		t.Errorf("content result stole the cursor: was on %s, now %s", want, got)
 	}
 }
 
@@ -1523,70 +1687,55 @@ func TestProjectsLoadDoesNotLeakIntoAnotherModal(t *testing.T) {
 	}
 }
 
-// results whose query no longer matches the input are discarded
-func TestStaleSearchResultsDiscarded(t *testing.T) {
-	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+// pressing enter on a content-matched row opens that day's log
+func TestLedgerFilterOpensContentMatch(t *testing.T) {
+	today := time.Date(2026, 7, 12, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()
-	seedLog(t, projectPath, "2026/07/09", "- ate a burrito\n")
-	m := newTestModel(t, projectPath, today)
+	seedLog(t, projectPath, "2026/07/09", "# 2026/07/09\n\n- got a burrito\n")
+	seedLog(t, projectPath, "2026/06/17", "# 2026/06/17\n\n- shipped it\n")
 
+	m := newLedgerModel(t, projectPath, today)
 	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
 	m = mm.(Model)
 	m = typeString(t, m, "burrito")
+	m = runFilterSearch(t, m)
 
-	// a result for an earlier query must not populate the picker
-	mm, _ = m.Update(searchResultsMsg{query: "burr", matches: []daylog.SearchMatch{{Date: "2026/07/09", Line: "- x"}}})
+	// the burrito day is the only content match; open it
+	m.restoreLedgerCursor("2026/07/09")
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = mm.(Model)
-	if len(m.picker.Items()) != 0 {
-		t.Errorf("stale search results populated the picker: %d rows", len(m.picker.Items()))
+	if m.mode != modeBrowse {
+		t.Fatal("expected browse mode after opening a content match")
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/09" {
+		t.Fatalf("expected to open 2026/07/09, got %s", day)
+	}
+	rendered, ok := findDayRendered(t, execCmd(t, cmd))
+	if !ok {
+		t.Fatal("expected a render after opening the match")
+	}
+	if !strings.Contains(rendered.content, "burrito") {
+		t.Errorf("expected the matched log rendered, got %q", rendered.content)
 	}
 }
 
-// a search jump to a day GetLogs filtered out (empty log.md) still lands
-func TestSearchJumpToFilteredDay(t *testing.T) {
-	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
-	m := newTestModel(t, t.TempDir(), today)
-
-	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
-	m = mm.(Model)
-
-	// the day isn't in m.days; selecting it via a result must insert + land
-	mm, _ = m.Update(searchResultsMsg{query: "", matches: nil})
-	m = mm.(Model)
-	m.picker.SetItems([]list.Item{pickerItem{label: "2026/07/01: - note", value: "2026/07/01"}})
-	m.picker.Select(0)
-
-	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = mm.(Model)
-	if day, _ := m.selectedDay(); day != "2026/07/01" {
-		t.Fatalf("expected to land on the searched day, got %s", day)
-	}
-	if !slices.Contains(m.days, "2026/07/01") {
-		t.Error("expected the searched day inserted into the day list")
-	}
-}
-
-// long search rows and tiny terminals must not overflow or panic
+// tiny terminals and long content must not overflow or panic across every mode
 func TestLayoutRobustAtExtremes(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
-
-	// long row is truncated to the terminal width
 	m := newTestModel(t, t.TempDir(), today)
-	m.mode = modeSearch
-	m.picker.SetItems([]list.Item{pickerItem{label: "2026/07/10: " + strings.Repeat("x", 200)}})
-	m.layout()
-	view := m.modalView("search", m.searchInput.View(), "", 22)
-	for _, ln := range strings.Split(view, "\n") {
-		if w := lipgloss.Width(ln); w > 80 {
-			t.Fatalf("modal row width %d exceeds terminal width 80", w)
-		}
+
+	// a very long ledger preview line is truncated to the terminal width
+	m.mode = modeLedger
+	longRow := ledgerRow{anchor: true, marker: "●", weekday: "Fri", date: "Jul 10", text: strings.Repeat("x", 200), bullet: true}
+	if w := lipgloss.Width(pickerDelegate{styles: defaultStyles()}.renderLedgerRow(longRow, 80, false)); w > 80 {
+		t.Fatalf("ledger row width %d exceeds terminal width 80", w)
 	}
 
 	// extreme sizes across every mode must not panic
 	for _, s := range [][2]int{{0, 0}, {1, 1}, {2, 2}, {80, 3}} {
 		mm, _ := m.Update(tea.WindowSizeMsg{Width: s[0], Height: s[1]})
 		m = mm.(Model)
-		for _, mode := range []mode{modeBrowse, modeInput, modeSearch, modeLedger, modeProjects, modeTodos} {
+		for _, mode := range []mode{modeBrowse, modeInput, modeLedger, modeProjects, modeTodos} {
 			m.mode = mode
 			_ = m.View()
 		}
