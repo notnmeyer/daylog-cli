@@ -27,8 +27,31 @@ type DayLog struct {
 	Date *time.Time
 }
 
+// sanitizeProject validates a project name so it maps to a single directory
+// directly under $XDG_DATA_HOME/daylog, never escaping it. nested project
+// names (containing a separator) are intentionally rejected for now.
+func sanitizeProject(project string) (string, error) {
+	name := strings.TrimSpace(project)
+	if name == "" {
+		return "", fmt.Errorf("invalid project name: must not be empty")
+	}
+	// IsLocal rejects "..", absolute paths, and (on Windows) volume names.
+	// the extra checks reject separators of either kind and "." / ".." so the
+	// name is always exactly one path segment under the daylog dir.
+	if !filepath.IsLocal(name) ||
+		strings.ContainsAny(name, `/\`) ||
+		name == "." || name == ".." {
+		return "", fmt.Errorf("invalid project name %q: must not contain path separators or \"..\"", project)
+	}
+	return name, nil
+}
+
 func projectPathAt(base, project string) (string, error) {
-	return filepath.Abs(filepath.Join(base, "daylog", project))
+	name, err := sanitizeProject(project)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Abs(filepath.Join(base, "daylog", name))
 }
 
 func ensureProjectPathAt(base, project string) (string, error) {

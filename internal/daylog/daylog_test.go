@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -238,6 +239,53 @@ func TestSearch(t *testing.T) {
 
 func strPtr(s string) *string { return &s }
 
+func TestSanitizeProject(t *testing.T) {
+	valid := []struct {
+		input string
+		want  string
+	}{
+		{"default", "default"},
+		{"work", "work"},
+		{"  work  ", "work"},
+		{"my-project_2023", "my-project_2023"},
+		{"日本語", "日本語"},
+		{"foo.bar", "foo.bar"},
+	}
+	for _, tt := range valid {
+		t.Run("valid/"+tt.input, func(t *testing.T) {
+			got, err := sanitizeProject(tt.input)
+			if err != nil {
+				t.Fatalf("sanitizeProject(%q) error = %v, want nil", tt.input, err)
+			}
+			if got != tt.want {
+				t.Errorf("sanitizeProject(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+
+	invalid := []string{
+		"",
+		"   ",
+		"..",
+		".",
+		"../../etc",
+		"../etc",
+		"/etc",
+		"/etc/passwd",
+		"work/client-x",
+		"foo/../bar",
+		`a\b`,
+		`a\..\b`,
+	}
+	for _, input := range invalid {
+		t.Run("invalid/"+input, func(t *testing.T) {
+			if _, err := sanitizeProject(input); err == nil {
+				t.Errorf("sanitizeProject(%q) error = nil, want error", input)
+			}
+		})
+	}
+}
+
 func TestProjectPathAt(t *testing.T) {
 	t.Run("returns path under base", func(t *testing.T) {
 		base := t.TempDir()
@@ -248,6 +296,33 @@ func TestProjectPathAt(t *testing.T) {
 		want := filepath.Join(base, "daylog", "myproject")
 		if got != want {
 			t.Errorf("projectPathAt() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("default project is allowed", func(t *testing.T) {
+		base := t.TempDir()
+		got, err := projectPathAt(base, "default")
+		if err != nil {
+			t.Fatalf("projectPathAt: %v", err)
+		}
+		want := filepath.Join(base, "daylog", "default")
+		if got != want {
+			t.Errorf("projectPathAt() = %q, want %q", got, want)
+		}
+	})
+
+	t.Run("rejects traversal and stays within base", func(t *testing.T) {
+		base := t.TempDir()
+		got, err := projectPathAt(base, "../../etc")
+		if err == nil {
+			t.Fatalf("projectPathAt(%q) error = nil, want error", "../../etc")
+		}
+		// on error the returned path must be empty, never an escaping path
+		if got != "" {
+			daylogDir := filepath.Join(base, "daylog")
+			if got != daylogDir && !strings.HasPrefix(got, daylogDir+string(filepath.Separator)) {
+				t.Errorf("projectPathAt() = %q, escaped %q", got, daylogDir)
+			}
 		}
 	})
 
@@ -312,6 +387,21 @@ func TestEnsureProjectPathAt(t *testing.T) {
 		}
 		if first != second {
 			t.Errorf("paths differ: %q vs %q", first, second)
+		}
+	})
+
+	// security: validation must run before MkdirAll so a traversal name never
+	// creates a directory outside the daylog dir
+	t.Run("rejects traversal without creating a directory", func(t *testing.T) {
+		base := t.TempDir()
+
+		if _, err := ensureProjectPathAt(base, "../../evil"); err == nil {
+			t.Fatal("ensureProjectPathAt(../../evil) error = nil, want error")
+		}
+
+		escaped := filepath.Join(base, "..", "..", "evil")
+		if _, err := os.Stat(escaped); !os.IsNotExist(err) {
+			t.Errorf("ensureProjectPathAt created %q; nothing should exist outside the daylog dir", escaped)
 		}
 	})
 }
