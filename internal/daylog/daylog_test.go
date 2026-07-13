@@ -106,6 +106,23 @@ func TestAppend(t *testing.T) {
 	}
 }
 
+// regression: log files must be owner-only (0600), not world-readable
+func TestAppend_CreatesFileWith0600(t *testing.T) {
+	dl := testDayLog(t)
+
+	if err := dl.Append("hello"); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+
+	info, err := os.Stat(dl.Path)
+	if err != nil {
+		t.Fatalf("stat %q: %v", dl.Path, err)
+	}
+	if perm := info.Mode().Perm(); perm != 0600 {
+		t.Errorf("perm = %o, want 0600", perm)
+	}
+}
+
 func TestCarryOverTodos(t *testing.T) {
 	tests := []struct {
 		name         string

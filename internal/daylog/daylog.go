@@ -105,7 +105,7 @@ func (d *DayLog) Append(content string) error {
 
 	content = strings.TrimRight(content, "\n") + "\n"
 
-	if err := os.WriteFile(d.Path, append(existing, []byte(content)...), 0644); err != nil {
+	if err := os.WriteFile(d.Path, append(existing, []byte(content)...), 0600); err != nil {
 		return err
 	}
 
@@ -193,7 +193,7 @@ func (d *DayLog) ToggleTodoItem(item todo.Item) error {
 		return err
 	}
 
-	return os.WriteFile(d.Path, []byte(updated), 0644)
+	return os.WriteFile(d.Path, []byte(updated), 0600)
 }
 
 // usePrevious mutates d.Path to point at the most recent log before now.
@@ -220,7 +220,7 @@ func createIfMissing(d *DayLog) error {
 		return err
 	}
 
-	f, err := os.Create(d.Path)
+	f, err := os.OpenFile(d.Path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
 	}
