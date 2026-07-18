@@ -496,7 +496,7 @@ func (m Model) footerView() string {
 		if m.dayFilter.Focused() {
 			return footer.Render("filter by date or text • ↑/↓ move • enter open • esc clear")
 		}
-		return footer.Render("↑/↓ move • enter open • a append • n new day • / filter • p project • ? help")
+		return footer.Render("↑/↓ move • enter open • a append • c copy • n new day • / filter • p project • ? help")
 	}
 
 	if m.status != "" {

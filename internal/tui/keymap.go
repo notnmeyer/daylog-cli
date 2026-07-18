@@ -60,8 +60,8 @@ func defaultKeyMap() keyMap {
 			key.WithHelp("e", "edit in $EDITOR"),
 		),
 		Copy: key.NewBinding(
-			key.WithKeys("y"),
-			key.WithHelp("y", "copy log"),
+			key.WithKeys("c"),
+			key.WithHelp("c", "copy log"),
 		),
 		Projects: key.NewBinding(
 			key.WithKeys("p"),

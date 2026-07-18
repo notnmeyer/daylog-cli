@@ -37,7 +37,7 @@ For other commands and options see, `daylog --help`.
 `daylog tui` opens an interactive terminal UI for browsing and editing your logs. It lands on a ledger of every day, newest first, with a preview of each. From there you can:
 
 - `↑`/`↓` move, `enter` to open a day
-- `a` append a one-line entry, `e` open the day in `$EDITOR`, `y` copy the log
+- `a` append a one-line entry, `e` open the day in `$EDITOR`, `c` copy the log (works from the day list too)
 - `/` filter by date or text (searches log contents), `n` start a new day from a date
 - `t` toggle todos, `p` switch projects, `?` for full help, `q` to quit
 
