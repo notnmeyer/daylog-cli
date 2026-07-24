@@ -4,6 +4,7 @@ goreleaser = "latest"
 "go:github.com/go-delve/delve/cmd/dlv" = "latest"
 "go:golang.org/x/tools/gopls" = "latest"
 "go:github.com/spf13/cobra-cli" = "latest"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"
 
 # used by the `build:demo` task. ttyd has no prebuilt macOS binary, so on
 # macOS install it separately: `brew install ttyd`
