@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/adrg/xdg v0.5.3
-	github.com/charmbracelet/bubbles v0.21.0
+	github.com/charmbracelet/bubbles v1.0.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/fang v1.0.0
 	github.com/charmbracelet/glamour v0.6.0
