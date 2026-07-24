@@ -1260,11 +1260,30 @@ func TestCopyKey(t *testing.T) {
 
 	m := newTestModel(t, projectPath, today)
 
-	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
 	if cmd == nil {
 		t.Fatal("expected a copy cmd")
 	}
 	// don't execute it — that would touch the real clipboard
+}
+
+// c copies from the ledger too, hitting the highlighted day (not today, when a
+// different day is highlighted). mirrors the log-view TestCopyKey
+func TestCopyKeyFromLedger(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/08", "- older entry\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	m.moveLedgerCursor(1) // highlight 2026/07/08
+	if day, _ := m.selectedDay(); day != "2026/07/08" {
+		t.Fatalf("expected 2026/07/08 selected, got %s", day)
+	}
+
+	_, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	if cmd == nil {
+		t.Fatal("expected a copy cmd from the ledger")
+	}
 }
 
 func TestCopyMissingLogReportsError(t *testing.T) {
