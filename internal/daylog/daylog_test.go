@@ -237,6 +237,109 @@ func TestSearch(t *testing.T) {
 	}
 }
 
+func TestDump(t *testing.T) {
+	project := t.TempDir()
+	writePrevLog(t, project, "2025/12/01", "# 2025/12/01\n\n- ate a burrito\n")
+	writePrevLog(t, project, "2025/12/02", "# 2025/12/02\n\n- wrote tests\n")
+	writePrevLog(t, project, "2025/12/03", "# 2025/12/03\n\n- reviewed a PR\n")
+
+	date := func(s string) *time.Time {
+		t, err := time.Parse("2006/01/02", s)
+		if err != nil {
+			panic(err)
+		}
+		return &t
+	}
+
+	t.Run("default order is oldest first", func(t *testing.T) {
+		got, err := Dump(project, "text", false, nil, nil)
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		want := "# 2025/12/01\n\n- ate a burrito\n" +
+			"# 2025/12/02\n\n- wrote tests\n" +
+			"# 2025/12/03\n\n- reviewed a PR\n"
+		if got != want {
+			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("reverse gives newest first", func(t *testing.T) {
+		got, err := Dump(project, "text", true, nil, nil)
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		want := "# 2025/12/03\n\n- reviewed a PR\n" +
+			"# 2025/12/02\n\n- wrote tests\n" +
+			"# 2025/12/01\n\n- ate a burrito\n"
+		if got != want {
+			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("no logs returns empty string", func(t *testing.T) {
+		empty := t.TempDir()
+		got, err := Dump(empty, "text", false, nil, nil)
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		if got != "" {
+			t.Errorf("Dump() = %q, want empty string", got)
+		}
+	})
+
+	t.Run("invalid format errors", func(t *testing.T) {
+		if _, err := Dump(project, "bogus", false, nil, nil); err == nil {
+			t.Error("Dump() error = nil, want error for invalid format")
+		}
+	})
+
+	t.Run("since excludes earlier logs", func(t *testing.T) {
+		got, err := Dump(project, "text", false, date("2025/12/02"), nil)
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		want := "# 2025/12/02\n\n- wrote tests\n" +
+			"# 2025/12/03\n\n- reviewed a PR\n"
+		if got != want {
+			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("until excludes later logs", func(t *testing.T) {
+		got, err := Dump(project, "text", false, nil, date("2025/12/02"))
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		want := "# 2025/12/01\n\n- ate a burrito\n" +
+			"# 2025/12/02\n\n- wrote tests\n"
+		if got != want {
+			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("since and until together are inclusive on both ends", func(t *testing.T) {
+		got, err := Dump(project, "text", false, date("2025/12/02"), date("2025/12/02"))
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		want := "# 2025/12/02\n\n- wrote tests\n"
+		if got != want {
+			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
+		}
+	})
+
+	t.Run("range excluding everything returns empty string", func(t *testing.T) {
+		got, err := Dump(project, "text", false, date("2026/01/01"), nil)
+		if err != nil {
+			t.Fatalf("Dump() error = %v", err)
+		}
+		if got != "" {
+			t.Errorf("Dump() = %q, want empty string", got)
+		}
+	})
+}
+
 func strPtr(s string) *string { return &s }
 
 func TestSanitizeProject(t *testing.T) {
