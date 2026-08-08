@@ -347,7 +347,8 @@ func Dump(projectPath, format string, reverse bool, since, until *time.Time) (st
 			}
 			return "", err
 		}
-		b.Write(content)
+		b.WriteString(strings.TrimRight(string(content), "\n"))
+		b.WriteString("\n\n")
 	}
 
 	return outputformatter.Format(format, b.String())
