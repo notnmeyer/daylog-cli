@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -307,6 +308,56 @@ func Search(projectPath, query string, ignoreCase bool) ([]SearchMatch, error) {
 		}
 	}
 	return matches, nil
+}
+
+// dump concatenates every log in the project oldest first by default (reverse=true for newest first).
+// since/until, if non-nil, restrict the range to logs dated on or after/before that day (inclusive on both ends).
+func Dump(projectPath, format string, reverse bool, since, until *time.Time) (string, error) {
+	logs, err := file.NewLogProvider().GetLogs(projectPath)
+	if err != nil {
+		return "", err
+	}
+
+	// GetLogs returns newest first; reverse that to get oldest-first by default
+	if !reverse {
+		slices.Reverse(logs)
+	}
+
+	var b strings.Builder
+	for _, log := range logs {
+		if since != nil || until != nil {
+			d, err := time.Parse("2006/01/02", log)
+			if err != nil {
+				return "", err
+			}
+			if since != nil && d.Before(dateOnly(*since)) {
+				continue
+			}
+			if until != nil && d.After(dateOnly(*until)) {
+				continue
+			}
+		}
+
+		content, err := os.ReadFile(filepath.Join(projectPath, log, "log.md"))
+		if err != nil {
+			// a log removed between listing and reading shouldn't sink the
+			// whole dump; skip it and return what we can
+			if os.IsNotExist(err) {
+				continue
+			}
+			return "", err
+		}
+		b.WriteString(strings.TrimRight(string(content), "\n"))
+		b.WriteString("\n\n")
+	}
+
+	return outputformatter.Format(format, b.String())
+}
+
+// dateOnly strips the time-of-day so since/until comparisons aren't affected
+// by what time "3 days ago" etc. happened to resolve to.
+func dateOnly(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // carryOverTodos reads the log before `before` and returns its unfinished todos.
