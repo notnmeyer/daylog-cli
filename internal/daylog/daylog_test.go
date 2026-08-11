@@ -256,9 +256,9 @@ func TestDump(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Dump() error = %v", err)
 		}
-		want := "# 2025/12/01\n\n- ate a burrito\n" +
-			"# 2025/12/02\n\n- wrote tests\n" +
-			"# 2025/12/03\n\n- reviewed a PR\n"
+		want := "# 2025/12/01\n\n- ate a burrito\n\n" +
+			"# 2025/12/02\n\n- wrote tests\n\n" +
+			"# 2025/12/03\n\n- reviewed a PR\n\n"
 		if got != want {
 			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
 		}
@@ -269,9 +269,9 @@ func TestDump(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Dump() error = %v", err)
 		}
-		want := "# 2025/12/03\n\n- reviewed a PR\n" +
-			"# 2025/12/02\n\n- wrote tests\n" +
-			"# 2025/12/01\n\n- ate a burrito\n"
+		want := "# 2025/12/03\n\n- reviewed a PR\n\n" +
+			"# 2025/12/02\n\n- wrote tests\n\n" +
+			"# 2025/12/01\n\n- ate a burrito\n\n"
 		if got != want {
 			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
 		}
@@ -299,8 +299,8 @@ func TestDump(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Dump() error = %v", err)
 		}
-		want := "# 2025/12/02\n\n- wrote tests\n" +
-			"# 2025/12/03\n\n- reviewed a PR\n"
+		want := "# 2025/12/02\n\n- wrote tests\n\n" +
+			"# 2025/12/03\n\n- reviewed a PR\n\n"
 		if got != want {
 			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
 		}
@@ -311,8 +311,8 @@ func TestDump(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Dump() error = %v", err)
 		}
-		want := "# 2025/12/01\n\n- ate a burrito\n" +
-			"# 2025/12/02\n\n- wrote tests\n"
+		want := "# 2025/12/01\n\n- ate a burrito\n\n" +
+			"# 2025/12/02\n\n- wrote tests\n\n"
 		if got != want {
 			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
 		}
@@ -323,7 +323,7 @@ func TestDump(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Dump() error = %v", err)
 		}
-		want := "# 2025/12/02\n\n- wrote tests\n"
+		want := "# 2025/12/02\n\n- wrote tests\n\n"
 		if got != want {
 			t.Errorf("Dump() =\n%q\nwant\n%q", got, want)
 		}
