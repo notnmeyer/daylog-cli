@@ -31,6 +31,10 @@ type Model struct {
 	project     string
 	projectPath string
 	today       time.Time
+	// now is the wall clock; refresh re-reads it so today tracks the calendar
+	// across a day cutover. clockTick is how often the cutover check runs
+	now         func() time.Time
+	clockTick   time.Duration
 	mode        mode
 	inputReturn mode                // mode to return to after the append input closes
 	days        []string            // YYYY/MM/DD, newest first
@@ -94,6 +98,8 @@ func New(projectPath, project string, today time.Time) Model {
 		project:     project,
 		projectPath: projectPath,
 		today:       today,
+		now:         time.Now,
+		clockTick:   time.Minute,
 		// land on the ledger: a list of days, not an empty today
 		mode:        modeLedger,
 		previews:    map[string][]string{},
@@ -109,7 +115,22 @@ func New(projectPath, project string, today time.Time) Model {
 }
 
 func (m Model) Init() tea.Cmd {
+	return tea.Batch(loadDays(m.projectPath, m.today), tickClock(m.clockTick))
+}
+
+// refresh re-reads the clock so today tracks the calendar, drops every cached
+// preview so content changed outside the tui is re-read, and reloads the day
+// list. shared by r on the ledger and the day-cutover tick
+func (m *Model) refresh() tea.Cmd {
+	m.today = m.now()
+	m.previews = map[string][]string{}
 	return loadDays(m.projectPath, m.today)
+}
+
+// crossedDay reports whether the wall clock has moved past the calendar day
+// the model currently treats as today
+func (m Model) crossedDay() bool {
+	return m.now().Format(dayFormat) != m.today.Format(dayFormat)
 }
 
 func (m *Model) layout() {

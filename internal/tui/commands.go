@@ -62,6 +62,7 @@ type searchResultsMsg struct {
 	matches []daylog.SearchMatch
 }
 type previewsLoadedMsg struct{ previews map[string][]string }
+type clockTickMsg struct{}
 type errMsg struct{ err error }
 
 // loadDays lists all logs for the project, ensuring today is present
@@ -256,6 +257,15 @@ func copyDay(projectPath, day string) tea.Cmd {
 
 		return copiedMsg{}
 	}
+}
+
+// tickClock fires clockTickMsg after d so the update loop can notice a day
+// cutover while the tui stays open. a short fixed interval (rather than one
+// timer aimed at midnight) survives a laptop sleeping across the cutover
+func tickClock(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return clockTickMsg{}
+	})
 }
 
 func clearStatusAfter(d time.Duration) tea.Cmd {
