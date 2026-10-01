@@ -372,11 +372,6 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.status = ""
 			return m, m.refresh()
 
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			m.layout()
-			return m, nil
-
 		case msg.String() == "n" || key.Matches(msg, m.keys.Search):
 			// both start the filter/new-day prompt in place
 			m.status = ""
