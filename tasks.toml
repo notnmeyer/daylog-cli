@@ -11,6 +11,12 @@ cmds = ["vhs demo/demo.tape"]
 [tasks.run]
 cmds = ["go run main.go {{.CLI_ARGS}}"]
 
+[tasks.gofmt]
+cmds = ["gofmt -l .", "test -z \"$(gofmt -l .)\""]
+
+[tasks."gofmt:write"]
+cmds = ["gofmt -w ."]
+
 [tasks.test]
 cmds = ["go test ./... -race"]
 

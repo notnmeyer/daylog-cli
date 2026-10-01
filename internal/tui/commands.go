@@ -30,6 +30,7 @@ type daysLoadedMsg struct {
 	days       []string
 	noLogToday bool
 }
+
 // dayRenderedMsg carries the day it rendered so a stale render (one that
 // resolves after the user navigated away) can be dropped instead of painting
 // the wrong day's content into the viewport

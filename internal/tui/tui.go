@@ -101,16 +101,16 @@ func New(projectPath, project string, today time.Time) Model {
 		now:         time.Now,
 		clockTick:   time.Minute,
 		// land on the ledger: a list of days, not an empty today
-		mode:        modeLedger,
-		previews:    map[string][]string{},
-		vp:          vp,
-		input:       input,
-		picker:      picker,
-		dayFilter:   dayFilter,
-		md:          newMDRenderer(),
-		keys:        defaultKeyMap(),
-		help:        help.New(),
-		styles:      st,
+		mode:      modeLedger,
+		previews:  map[string][]string{},
+		vp:        vp,
+		input:     input,
+		picker:    picker,
+		dayFilter: dayFilter,
+		md:        newMDRenderer(),
+		keys:      defaultKeyMap(),
+		help:      help.New(),
+		styles:    st,
 	}
 }
 

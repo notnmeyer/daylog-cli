@@ -391,7 +391,6 @@ func (m Model) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, m.headerView(), body, m.footerView())
 }
 
-
 // hasLog reports whether a day has a non-empty log. today is force-prepended
 // into m.days even when empty, so membership alone isn't enough — a day has a
 // log iff it isn't the injected-empty today. the preview cache confirms real
