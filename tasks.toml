@@ -17,6 +17,9 @@ cmds = ["gofmt -l .", "test -z \"$(gofmt -l .)\""]
 [tasks."gofmt:write"]
 cmds = ["gofmt -w ."]
 
+[tasks.vet]
+cmds = ["go vet ./..."]
+
 [tasks.test]
 cmds = ["go test ./... -race"]
 
