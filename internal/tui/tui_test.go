@@ -1552,7 +1552,7 @@ func TestLedgerRowColumns(t *testing.T) {
 		{name: "cross-year shows full year", day: "2025/08/09", preview: []string{"burrito"}, wantMarker: "●", wantDate: "Aug 09 2025", wantWeekday: "Sat", wantText: "burrito"},
 		{name: "today reads as the word today", day: "2026/07/11", preview: []string{"shipped it"}, wantMarker: "●", wantDate: "today", wantWeekday: "Sat", wantText: "shipped it"},
 		{name: "yesterday reads as the word yesterday", day: "2026/07/10", preview: []string{"did a thing"}, wantMarker: "●", wantDate: "yesterday", wantWeekday: "Fri", wantText: "did a thing"},
-		{name: "empty today invites", day: "2026/07/11", preview: nil, wantMarker: "＋", wantDate: "today", wantWeekday: "Sat", wantText: "nothing logged yet · a append · e edit", wantAccent: true},
+		{name: "empty today invites", day: "2026/07/11", preview: nil, wantMarker: "＋", wantDate: "today", wantWeekday: "Sat", wantText: "nothing logged yet", wantAccent: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -275,7 +275,7 @@ func dayBlock(day string, today time.Time, preview []string, noLogToday bool) []
 	if len(lines) == 0 {
 		if isToday(day, today) && noLogToday {
 			marker = "＋"
-			lines = []string{"nothing logged yet · a append · e edit"}
+			lines = []string{"nothing logged yet"}
 			accent = true
 		} else {
 			lines = []string{""} // renders as a faint tick
