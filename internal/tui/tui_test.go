@@ -971,6 +971,27 @@ func TestLedgerEditFollowsSelection(t *testing.T) {
 	}
 }
 
+func TestLedgerCopyFollowsSelection(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/08", "- copy me\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	m.moveLedgerCursor(1) // select 2026/07/08
+	if day, _ := m.selectedDay(); day != "2026/07/08" {
+		t.Fatalf("expected 2026/07/08 selected, got %s", day)
+	}
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	if cmd == nil {
+		t.Fatal("expected a copy cmd for the selected day")
+	}
+	// don't execute it — that would touch the real clipboard
+	if mm.(Model).mode != modeLedger {
+		t.Error("expected to stay on the ledger after copying")
+	}
+}
+
 func TestLedgerNewDayRow(t *testing.T) {
 	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
 	projectPath := t.TempDir()

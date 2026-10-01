@@ -348,6 +348,13 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, openEditor(m.projectPath, day)
 
+		case key.Matches(msg, m.keys.Copy):
+			day, ok := m.selectedDay()
+			if !ok {
+				return m, nil
+			}
+			return m, copyDay(m.projectPath, day)
+
 		case key.Matches(msg, m.keys.Older):
 			m.moveLedgerCursor(1) // older = further down the newest-first list
 			return m, nil
@@ -364,11 +371,6 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Refresh):
 			m.status = ""
 			return m, m.refresh()
-
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			m.layout()
-			return m, nil
 
 		case msg.String() == "n" || key.Matches(msg, m.keys.Search):
 			// both start the filter/new-day prompt in place
