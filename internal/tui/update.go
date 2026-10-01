@@ -168,6 +168,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 
+	case clockTickMsg:
+		// keep ticking for as long as the program runs; only a real calendar
+		// change triggers a reload, so an idle session stays quiet
+		if m.crossedDay() {
+			return m, tea.Batch(m.refresh(), tickClock(m.clockTick))
+		}
+		return m, tickClock(m.clockTick)
+
 	case copiedMsg:
 		m.status = "copied to clipboard"
 		return m, clearStatusAfter(2 * time.Second)
@@ -352,6 +360,10 @@ func (m Model) onLedgerKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.mode = modeProjects
 			m.status = ""
 			return m, loadProjects()
+
+		case key.Matches(msg, m.keys.Refresh):
+			m.status = ""
+			return m, m.refresh()
 
 		case key.Matches(msg, m.keys.Help):
 			m.help.ShowAll = !m.help.ShowAll

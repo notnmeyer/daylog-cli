@@ -15,6 +15,7 @@ type keyMap struct {
 	Copy     key.Binding
 	Projects key.Binding
 	Todos    key.Binding
+	Refresh  key.Binding
 	Help     key.Binding
 	Quit     key.Binding
 }
@@ -70,6 +71,11 @@ func defaultKeyMap() keyMap {
 		Todos: key.NewBinding(
 			key.WithKeys("t"),
 			key.WithHelp("t", "todos"),
+		),
+		// ledger only: re-read the clock and the day list
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh"),
 		),
 		Help: key.NewBinding(
 			key.WithKeys("?"),

@@ -1741,3 +1741,159 @@ func TestLayoutRobustAtExtremes(t *testing.T) {
 		}
 	}
 }
+
+// r on the ledger re-reads the clock and the day list: a day that arrived
+// outside the tui, and a new calendar day, both show up without a restart
+func TestLedgerRefreshKey(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/09", "- before refresh\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	if m.days[0] != "2026/07/10" {
+		t.Fatalf("expected today pinned first, got %v", m.days)
+	}
+
+	// the clock moves to the next day and a log is written behind the tui's
+	// back, as if `daylog -a` ran from another shell
+	tomorrow := today.Add(24 * time.Hour)
+	m.now = func() time.Time { return tomorrow }
+	seedLog(t, projectPath, "2026/07/10", "- written elsewhere\n")
+	seedLog(t, projectPath, "2026/07/09", "- before refresh\n- edited elsewhere\n")
+
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = mm.(Model)
+	drainAll(t, &m, cmd)
+
+	if !m.today.Equal(tomorrow) {
+		t.Errorf("expected today to track the clock, got %s", m.today)
+	}
+	if m.mode != modeLedger {
+		t.Errorf("expected to stay on the ledger, got mode %d", m.mode)
+	}
+	if m.days[0] != "2026/07/11" || !m.noLogToday {
+		t.Errorf("expected the new logless day pinned first, got days=%v noLogToday=%v", m.days, m.noLogToday)
+	}
+	if got := m.previews["2026/07/10"]; len(got) != 1 || got[0] != "written elsewhere" {
+		t.Errorf("expected the externally written log's preview, got %v", got)
+	}
+	if got := m.previews["2026/07/09"]; len(got) != 2 {
+		t.Errorf("expected the edited log's preview re-read, got %v", got)
+	}
+
+	// the new day block renders with the empty-today call to action
+	found := false
+	for _, it := range m.picker.Items() {
+		if p, ok := it.(pickerItem); ok && p.kind == itemDay && p.value == "2026/07/11" {
+			found = p.row != nil && p.row.marker == "＋"
+		}
+	}
+	if !found {
+		t.Error("expected the new day's row to carry the ＋ marker")
+	}
+}
+
+// r while the filter is focused types into the filter rather than refreshing
+func TestLedgerRefreshKeyFeedsFilter(t *testing.T) {
+	today := time.Date(2026, 7, 10, 12, 0, 0, 0, time.Local)
+	m := newLedgerModel(t, t.TempDir(), today)
+	m.now = func() time.Time { return today.Add(24 * time.Hour) }
+
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	m = mm.(Model)
+	mm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = mm.(Model)
+
+	if got := m.dayFilter.Value(); got != "r" {
+		t.Errorf("expected r to feed the filter, got %q", got)
+	}
+	if !m.today.Equal(today) {
+		t.Errorf("expected today unchanged while filtering, got %s", m.today)
+	}
+}
+
+// the clock tick is quiet until the calendar day changes, then reloads the
+// day list with the new today pinned first and keeps ticking either way
+func TestClockTickCrossesDay(t *testing.T) {
+	today := time.Date(2026, 7, 10, 23, 59, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "- late entry\n")
+	seedLog(t, projectPath, "2026/07/09", "- yesterday\n")
+
+	m := newLedgerModel(t, projectPath, today)
+	m.clockTick = 0 // fire the rescheduled tick immediately so execCmd doesn't block
+	m.now = func() time.Time { return today }
+
+	// same day: nothing reloads, the tick is rescheduled
+	mm, cmd := m.Update(clockTickMsg{})
+	m = mm.(Model)
+	msgs := execCmd(t, cmd)
+	if len(msgs) != 1 {
+		t.Fatalf("expected only a rescheduled tick on the same day, got %v", msgs)
+	}
+	if _, ok := msgs[0].(clockTickMsg); !ok {
+		t.Fatalf("expected a clockTickMsg, got %T", msgs[0])
+	}
+	if m.days[0] != "2026/07/10" {
+		t.Errorf("expected days untouched on the same day, got %v", m.days)
+	}
+
+	// cross midnight: the tick reloads days against the new today
+	m.now = func() time.Time { return today.Add(2 * time.Minute) }
+	mm, cmd = m.Update(clockTickMsg{})
+	m = mm.(Model)
+
+	ticked := false
+	for _, msg := range execCmd(t, cmd) {
+		switch msg.(type) {
+		case clockTickMsg:
+			ticked = true
+		case daysLoadedMsg:
+			mm, next := m.Update(msg)
+			m = mm.(Model)
+			drainAll(t, &m, next)
+		}
+	}
+	if !ticked {
+		t.Error("expected the tick to be rescheduled after a cutover")
+	}
+	if m.today.Day() != 11 {
+		t.Errorf("expected today to advance to the 11th, got %s", m.today)
+	}
+	if m.days[0] != "2026/07/11" || !m.noLogToday {
+		t.Errorf("expected the new day pinned first, got days=%v noLogToday=%v", m.days, m.noLogToday)
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected the cursor to stay on the day it was on, got %s", day)
+	}
+}
+
+// in the reading view a cutover re-labels the day without moving the reader
+func TestClockTickInBrowseKeepsSelection(t *testing.T) {
+	today := time.Date(2026, 7, 10, 23, 59, 0, 0, time.Local)
+	projectPath := t.TempDir()
+	seedLog(t, projectPath, "2026/07/10", "- late entry\n")
+
+	m := newTestModel(t, projectPath, today)
+	m.clockTick = 0
+	m.now = func() time.Time { return today.Add(2 * time.Minute) }
+
+	mm, cmd := m.Update(clockTickMsg{})
+	m = mm.(Model)
+	for _, msg := range execCmd(t, cmd) {
+		if loaded, ok := msg.(daysLoadedMsg); ok {
+			mm, _ = m.Update(loaded)
+			m = mm.(Model)
+		}
+	}
+
+	if m.mode != modeBrowse {
+		t.Errorf("expected to stay in browse, got mode %d", m.mode)
+	}
+	if day, _ := m.selectedDay(); day != "2026/07/10" {
+		t.Errorf("expected the reader to stay on 2026/07/10, got %s", day)
+	}
+	if !strings.Contains(m.headerView(), "yesterday") {
+		t.Errorf("expected the header to re-label the day as yesterday, got %q", m.headerView())
+	}
+}

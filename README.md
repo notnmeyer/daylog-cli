@@ -39,6 +39,7 @@ For other commands and options see, `daylog --help`.
 - `↑`/`↓` move, `enter` to open a day
 - `a` append a one-line entry, `e` open the day in `$EDITOR`, `y` copy the log
 - `/` filter by date or text (searches log contents), `n` start a new day from a date
+- `r` refresh the ledger (the ledger also picks up a new day on its own when the date changes)
 - `t` toggle todos, `p` switch projects, `?` for full help, `q` to quit
 
 Add `-p <project>` to open a specific project.
